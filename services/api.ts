@@ -258,12 +258,20 @@ export const hrApi = {
   deleteEmployee: (id: number) => 
     api.delete(`/hr/employees/${id}/`),
   
-  // Salaries
-  getSalaries: () => 
+    getSalaries: () => 
     api.get('/hr/salaries/'),
+  
+  getSalary: (id: number) => 
+    api.get(`/hr/salaries/${id}/`),
   
   createSalary: (data: any) => 
     api.post('/hr/salaries/', data),
+  
+  updateSalary: (id: number, data: any) => 
+    api.put(`/hr/salaries/${id}/`, data),
+  
+  deleteSalary: (id: number) => 
+    api.delete(`/hr/salaries/${id}/`),
   
   // Payroll
   getPayrolls: () => 

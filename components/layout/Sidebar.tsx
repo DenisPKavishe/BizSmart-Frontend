@@ -269,7 +269,9 @@ const navItems = [
   { name: 'Loans', href: '/financials/loans', icon: FiDollarSign },
   { name: 'Employees', href: '/hr/employees', icon: FiUsers },
   { name: 'Payroll', href: '/hr/payroll', icon: FiUserCheck },
+  { name: 'Salaries', href: '/hr/salaries', icon: FiUserCheck },
   { name: 'Analytics', href: '/bi/dashboard', icon: FiBarChart2 },
+  { name: 'Analytics', href: '/bi/financial', icon: FiBarChart2 },
   { name: 'Reports', href: '/reports', icon: FiTrendingUp },
 ];
 

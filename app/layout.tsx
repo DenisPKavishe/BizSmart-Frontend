@@ -3,6 +3,7 @@ import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import { Toaster } from 'react-hot-toast';
 import './globals.css';
+import ChatBot from '@/components/chatBot/ChatBot';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -21,6 +22,7 @@ export default function RootLayout({
       <body className={inter.className}>
         {children}
         <Toaster position="top-right" />
+        <ChatBot />
       </body>
     </html>
   );
