@@ -222,7 +222,6 @@ export default function POSPage() {
         notes: returnChange ? `Change returned: TZS ${calculatedChange}` : 'No change returned'
       };
       
-      // Add customer_id if an existing customer was selected
       if (selectedCustomerId) {
         saleData.customer_id = selectedCustomerId;
       }
@@ -237,7 +236,6 @@ export default function POSPage() {
       
       toast.success(`Sale completed! Invoice: ${response.data.sale.invoice_number}`);
       
-      // Reset cart and form
       setCart([]);
       setAmountPaid(0);
       setReturnChange(true);
@@ -269,7 +267,103 @@ export default function POSPage() {
   };
 
   const printReceipt = () => {
-    window.print();
+    if (!lastSale) return;
+    
+    const sale = lastSale.sale;
+    const formatCurrencyPrint = (value: number) => {
+      if (!value && value !== 0) return 'TZS 0';
+      return `TZS ${value.toLocaleString()}`;
+    };
+    
+    const printWindow = window.open('', '_blank', 'width=400,height=600');
+    if (!printWindow) {
+      toast.error('Please allow popups to print receipt');
+      return;
+    }
+    
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Receipt - ${sale.invoice_number}</title>
+        <style>
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          body {
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            line-height: 1.4;
+            padding: 20px;
+            max-width: 300px;
+            margin: 0 auto;
+          }
+          .header { text-align: center; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px dashed #000; }
+          .business-name { font-size: 16px; font-weight: bold; margin-bottom: 5px; }
+          .receipt-title { font-size: 14px; font-weight: bold; margin: 10px 0; text-align: center; }
+          .info-row { display: flex; justify-content: space-between; margin-bottom: 5px; }
+          .items-table { width: 100%; margin: 15px 0; border-collapse: collapse; }
+          .items-table th, .items-table td { text-align: left; padding: 4px 0; }
+          .items-table th { border-bottom: 1px dashed #000; font-weight: bold; }
+          .items-table td:last-child, .items-table th:last-child { text-align: right; }
+          .totals { margin-top: 15px; padding-top: 10px; border-top: 1px dashed #000; }
+          .total-row { display: flex; justify-content: space-between; margin-bottom: 5px; font-weight: bold; }
+          .footer { text-align: center; margin-top: 20px; padding-top: 10px; border-top: 1px dashed #000; font-size: 10px; }
+          .divider { border-top: 1px dashed #000; margin: 10px 0; }
+          .capitalize { text-transform: capitalize; }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <div class="business-name">${user?.business_name || 'BizSmart'}</div>
+          <div>${(user as any)?.business_city || ''}</div>
+          <div>Tel: ${user?.phone || ''}</div>
+        </div>
+        
+        <div class="receipt-title">SALES RECEIPT</div>
+        
+        <div class="info-row"><span>Invoice No:</span><span><strong>${sale.invoice_number}</strong></span></div>
+        <div class="info-row"><span>Date:</span><span>${new Date(sale.sale_date).toLocaleString()}</span></div>
+        <div class="info-row"><span>Cashier:</span><span>${user?.username || 'N/A'}</span></div>
+        <div class="info-row"><span>Customer:</span><span>${sale.customer_name || 'Walk-in Customer'}</span></div>
+        ${sale.customer_phone ? `<div class="info-row"><span>Phone:</span><span>${sale.customer_phone}</span></div>` : ''}
+        
+        <div class="divider"></div>
+        
+        <table class="items-table">
+          <thead><tr><th>Item</th><th>Qty</th><th>Price</th><th>Total</th></tr></thead>
+          <tbody>
+            ${sale.items?.map((item: any) => `
+              <tr>
+                <td>${item.product_name}</td>
+                <td>${item.quantity}</td>
+                <td>${formatCurrencyPrint(item.unit_price)}</td>
+                <td>${formatCurrencyPrint(item.total_price)}</td>
+              </tr>
+            `).join('') || '<tr><td colspan="4">No items</td</tr>'}
+          </tbody>
+        </table>
+        
+        <div class="divider"></div>
+        
+        <div class="totals">
+          <div class="info-row"><span>Subtotal:</span><span>${formatCurrencyPrint(sale.subtotal)}</span></div>
+          ${sale.discount_amount > 0 ? `<div class="info-row"><span>Discount:</span><span>-${formatCurrencyPrint(sale.discount_amount)}</span></div>` : ''}
+          <div class="total-row"><span>TOTAL:</span><span>${formatCurrencyPrint(sale.total_amount)}</span></div>
+          <div class="info-row"><span>Payment Method:</span><span class="capitalize">${sale.payment_method}</span></div>
+          <div class="info-row"><span>Amount Paid:</span><span>${formatCurrencyPrint(lastSale.actualAmountPaid)}</span></div>
+          ${lastSale.changeReturned > 0 ? `<div class="info-row"><span>Change:</span><span>${formatCurrencyPrint(lastSale.changeReturned)}</span></div>` : ''}
+        </div>
+        
+        <div class="footer">
+          <div>Thank you for your business!</div>
+          <div>${sale.status === 'completed' ? '✓ Payment Completed' : 'Status: ' + sale.status}</div>
+          <div style="margin-top: 5px;">${new Date().toLocaleString()}</div>
+        </div>
+      </body>
+      </html>
+    `);
+    
+    printWindow.document.close();
+    printWindow.print();
   };
 
   if (isLoading) {
@@ -577,7 +671,6 @@ export default function POSPage() {
                     className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 text-lg"
                   />
                   
-                  {/* Change Options */}
                   {amountPaid > total && (
                     <div className="mt-4 p-4 bg-yellow-50 rounded-lg border border-yellow-200">
                       <div className="flex items-center justify-between mb-2">

@@ -1,15 +1,47 @@
+// // app/layout.tsx
+// import type { Metadata } from 'next';
+// import { Inter } from 'next/font/google';
+// import { Toaster } from 'react-hot-toast';
+// import './globals.css';
+// import ChatBot from '@/components/chatBot/ChatBot';
+
+// const inter = Inter({ subsets: ['latin'] });
+
+// export const metadata: Metadata = {
+//   title: 'BizSmart - Business Management Platform',
+//   description: 'All-in-One Business Management Platform for African SMEs',
+// };
+
+// export default function RootLayout({
+//   children,
+// }: {
+//   children: React.ReactNode;
+// }) {
+//   return (
+//     <html lang="en">
+//       <body className={inter.className}>
+//         {children}
+//         <Toaster position="top-right" />
+//         <ChatBot />
+//       </body>
+//     </html>
+//   );
+// }
+
+
 // app/layout.tsx
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
-import { Toaster } from 'react-hot-toast';
 import './globals.css';
+import { Toaster } from 'react-hot-toast';
 import ChatBot from '@/components/chatBot/ChatBot';
+
 
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'BizSmart - Business Management Platform',
-  description: 'All-in-One Business Management Platform for African SMEs',
+  title: 'BizSmart - Business Management System',
+  description: 'Complete business management solution',
 };
 
 export default function RootLayout({

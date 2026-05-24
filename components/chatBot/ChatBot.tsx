@@ -1,4 +1,3 @@
-// components/ChatBot.tsx
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
@@ -55,21 +54,21 @@ How can I help you today?`,
     }
   }, []);
 
-  // Save chat history
+  
   useEffect(() => {
     if (messages.length > 0) {
       localStorage.setItem('geminiChatHistory', JSON.stringify(messages));
     }
   }, [messages]);
 
-  // Scroll to bottom
+  
   useEffect(() => {
     if (messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [messages, isTyping]);
 
-  // Click outside to close
+  
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (modalRef.current && !modalRef.current.contains(event.target as Node) && isOpen) {
@@ -184,7 +183,7 @@ How can I help you today?`,
 
   return (
     <>
-      {/* Floating Button - Gemini Style */}
+      
       <motion.button
         initial={{ scale: 0, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
@@ -201,7 +200,7 @@ How can I help you today?`,
         </svg>
       </motion.button>
 
-      {/* Gemini-Style Modal */}
+      
       <AnimatePresence>
         {isOpen && (
           <motion.div
@@ -218,7 +217,7 @@ How can I help you today?`,
               transition={{ type: "spring", damping: 25, stiffness: 300 }}
               className="bg-white rounded-3xl shadow-2xl w-[95vw] max-w-[900px] h-[85vh] max-h-[800px] flex flex-col overflow-hidden"
             >
-              {/* Header - Gemini Style Minimal */}
+              
               <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center shadow-md">
@@ -255,7 +254,7 @@ How can I help you today?`,
                 </div>
               </div>
 
-              {/* Messages - Gemini Style Bubbles */}
+              
               <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6 bg-gray-50/30">
                 {messages.map((message, index) => (
                   <motion.div
@@ -294,7 +293,7 @@ How can I help you today?`,
                   </motion.div>
                 ))}
                 
-                {/* Typing Indicator - Gemini Style */}
+                
                 {isTyping && (
                   <motion.div
                     initial={{ opacity: 0, y: 10 }}
@@ -319,7 +318,7 @@ How can I help you today?`,
                 <div ref={messagesEndRef} />
               </div>
 
-              {/* Input Area - Gemini Style Minimal */}
+              
               <div className="border-t border-gray-100 p-5 bg-white">
                 <div className="flex gap-3">
                   <div className="relative flex-1">
@@ -346,12 +345,6 @@ How can I help you today?`,
                   </button>
                 </div>
                 
-                {/* Footer - Gemini Style */}
-                <div className="flex items-center justify-center gap-4 mt-3">
-                  <p className="text-xs text-gray-400">
-                    AI can make mistakes. Check important information.
-                  </p>
-                </div>
               </div>
             </motion.div>
           </motion.div>

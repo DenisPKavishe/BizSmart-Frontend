@@ -50,6 +50,12 @@ export const biApi = {
   
   getExecutiveDashboard: () => 
     api.get('/bi/executive/'),
+  
+  getMonthOverMonth: () => 
+    api.get('/bi/trends/'),
+
+  getYearOverYear: () => 
+    api.get('/bi/trends/', { params: { days: 730 } }),  
 };
 
 // ==================== FINANCIALS ====================
@@ -188,6 +194,9 @@ export const inventoryApi = {
   
   receivePurchaseOrder: (id: number) => 
     api.post(`/inventory/purchase-orders/${id}/receive/`),
+  
+  getInventoryValue: () => 
+    api.get('/inventory/products/', { params: { page_size: 1000 } }),  
 };
 
 // ==================== SALES ====================
@@ -231,65 +240,111 @@ export const salesApi = {
   
   getTodaySales: () => 
     api.get('/sales/reports/today/'),
+
+  // getDailyReport: (days?: number) => 
+  //   api.get('/sales/reports/daily/', { params: { days } }),
+  
+  // getTodayReport: () => 
+  //   api.get('/sales/reports/today/'), 
+    
+  getDailyReport: (params?: { days?: number }) => 
+    api.get('/sales/reports/daily/', { params }),
+
+  getTodayReport: () => 
+    api.get('/sales/reports/today/'),
+
+  getSalesByDateRange: (startDate: string, endDate: string) => 
+    api.get('/sales/sales/', { params: { start_date: startDate, end_date: endDate, page_size: 1000 } }),  
 };
 
-// ==================== HR ====================
+// // ==================== HR ====================
+// export const hrApi = {
+//   // Departments
+//   getDepartments: () => 
+//     api.get('/hr/departments/'),
+  
+//   createDepartment: (data: any) => 
+//     api.post('/hr/departments/', data),
+  
+//   // Employees
+//   getEmployees: () => 
+//     api.get('/hr/employees/'),
+  
+//   getEmployee: (id: number) => 
+//     api.get(`/hr/employees/${id}/`),
+  
+//   createEmployee: (data: any) => 
+//     api.post('/hr/employees/', data),
+  
+//   updateEmployee: (id: number, data: any) => 
+//     api.put(`/hr/employees/${id}/`, data),
+  
+//   deleteEmployee: (id: number) => 
+//     api.delete(`/hr/employees/${id}/`),
+  
+//     getSalaries: () => 
+//     api.get('/hr/salaries/'),
+  
+//   getSalary: (id: number) => 
+//     api.get(`/hr/salaries/${id}/`),
+  
+//   createSalary: (data: any) => 
+//     api.post('/hr/salaries/', data),
+  
+//   updateSalary: (id: number, data: any) => 
+//     api.put(`/hr/salaries/${id}/`, data),
+  
+//   deleteSalary: (id: number) => 
+//     api.delete(`/hr/salaries/${id}/`),
+  
+//   // Payroll
+//   getPayrolls: () => 
+//     api.get('/hr/payroll/'),
+  
+//   processPayroll: (month: number, year: number, includeCommission?: boolean) => 
+//     api.post('/hr/payroll/process/', { month, year, include_commission: includeCommission }),
+  
+//   markPayrollPaid: (id: number) => 
+//     api.post(`/hr/payroll/${id}/mark-paid/`),
+  
+//   // Reports
+//   getSalesByEmployee: (month?: number, year?: number) => 
+//     api.get('/hr/reports/sales-by-employee/', { params: { month, year } }),
+  
+//   getTopPerformers: (limit: number = 10, days: number = 30) => 
+//     api.get(`/hr/reports/top-performers/?limit=${limit}&days=${days}`),
+  
+//   getPayrollReport: (year: number) => 
+//     api.get(`/hr/reports/payroll/?year=${year}`),
+// };
+
+
+// services/api.ts - Add these to your existing hrApi
+
 export const hrApi = {
   // Departments
-  getDepartments: () => 
-    api.get('/hr/departments/'),
-  
-  createDepartment: (data: any) => 
-    api.post('/hr/departments/', data),
+  getDepartments: () => api.get('/hr/departments/'),
+  createDepartment: (data: any) => api.post('/hr/departments/', data),
   
   // Employees
-  getEmployees: () => 
-    api.get('/hr/employees/'),
+  getEmployees: () => api.get('/hr/employees/'),
+  getEmployee: (id: number) => api.get(`/hr/employees/${id}/`),
+  createEmployee: (data: any) => api.post('/hr/employees/', data),
+  updateEmployee: (id: number, data: any) => api.put(`/hr/employees/${id}/`, data),
+  deleteEmployee: (id: number) => api.delete(`/hr/employees/${id}/`),
   
-  getEmployee: (id: number) => 
-    api.get(`/hr/employees/${id}/`),
+  // Salaries
+  getSalaries: () => api.get('/hr/salaries/'),
+  getSalary: (id: number) => api.get(`/hr/salaries/${id}/`),
+  createSalary: (data: any) => api.post('/hr/salaries/', data),
+  updateSalary: (id: number, data: any) => api.put(`/hr/salaries/${id}/`, data),
+  deleteSalary: (id: number) => api.delete(`/hr/salaries/${id}/`),
   
-  createEmployee: (data: any) => 
-    api.post('/hr/employees/', data),
-  
-  updateEmployee: (id: number, data: any) => 
-    api.put(`/hr/employees/${id}/`, data),
-  
-  deleteEmployee: (id: number) => 
-    api.delete(`/hr/employees/${id}/`),
-  
-    getSalaries: () => 
-    api.get('/hr/salaries/'),
-  
-  getSalary: (id: number) => 
-    api.get(`/hr/salaries/${id}/`),
-  
-  createSalary: (data: any) => 
-    api.post('/hr/salaries/', data),
-  
-  updateSalary: (id: number, data: any) => 
-    api.put(`/hr/salaries/${id}/`, data),
-  
-  deleteSalary: (id: number) => 
-    api.delete(`/hr/salaries/${id}/`),
-  
-  // Payroll
-  getPayrolls: () => 
-    api.get('/hr/payroll/'),
-  
-  processPayroll: (month: number, year: number, includeCommission?: boolean) => 
-    api.post('/hr/payroll/process/', { month, year, include_commission: includeCommission }),
-  
+  // Payroll - Existing Endpoints Only
+  getPayrolls: () => api.get('/hr/payroll/'),
+  getPayroll: (id: number) => api.get(`/hr/payroll/${id}/`),
+  processPayroll: (month: number, year: number) => 
+    api.post('/hr/payroll/process/', { month, year }),
   markPayrollPaid: (id: number) => 
     api.post(`/hr/payroll/${id}/mark-paid/`),
-  
-  // Reports
-  getSalesByEmployee: (month?: number, year?: number) => 
-    api.get('/hr/reports/sales-by-employee/', { params: { month, year } }),
-  
-  getTopPerformers: (limit: number = 10, days: number = 30) => 
-    api.get(`/hr/reports/top-performers/?limit=${limit}&days=${days}`),
-  
-  getPayrollReport: (year: number) => 
-    api.get(`/hr/reports/payroll/?year=${year}`),
 };

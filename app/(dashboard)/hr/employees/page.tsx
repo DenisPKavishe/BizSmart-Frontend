@@ -1,4 +1,5 @@
-// app/(dashboard)/hr/employees/page.tsx
+// app/(dashboard)/hr/employees/page.tsx - COMPLETE WITH ALL MODALS
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -11,20 +12,25 @@ import {
   FiEdit2,
   FiTrash2,
   FiFilter,
-  FiX,
   FiRefreshCw,
   FiUser,
   FiMail,
   FiPhone,
-  FiCalendar,
   FiBriefcase,
-  FiDollarSign,
   FiUsers,
   FiCheckCircle,
   FiAlertCircle,
   FiEye,
+  FiX,
+  FiCalendar,
+  FiMapPin,
+  FiCreditCard,
+  FiHome,
+  FiSmartphone,
+  FiFileText,
 } from 'react-icons/fi';
-import { FaBuilding, FaMoneyBillWave } from 'react-icons/fa';
+import { FaBuilding, FaMoneyBillWave, FaUserGraduate } from 'react-icons/fa';
+import EmployeePaymentHistory from '@/components/hr/EmployeePaymentHistory';
 
 interface Employee {
   id: number;
@@ -42,7 +48,7 @@ interface Employee {
   gender: string;
   date_of_birth: string;
   job_title: string;
-  employment_type: 'full_time' | 'part_time' | 'contract' | 'intern';
+  employment_type: string;
   hire_date: string;
   termination_date: string | null;
   is_active: boolean;
@@ -66,6 +72,52 @@ interface Department {
   description?: string;
 }
 
+// Delete Confirmation Modal
+function DeleteEmployeeModal({ isOpen, onClose, onConfirm, employeeName, isDeleting }: any) {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl max-w-md w-full">
+        <div className="p-4 border-b border-gray-200 flex justify-between items-center">
+          <h3 className="text-lg font-semibold flex items-center gap-2">
+            <FiAlertCircle className="text-red-500" size={20} />
+            Delete Employee
+          </h3>
+          <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600">
+            <FiX size={20} />
+          </button>
+        </div>
+        
+        <div className="p-6">
+          <p className="text-gray-700 mb-2">
+            Are you sure you want to delete <span className="font-semibold text-gray-900">"{employeeName}"</span>?
+          </p>
+          <p className="text-sm text-gray-500 mb-6">
+            This action will deactivate the employee. The employee's data will be preserved for reporting purposes.
+          </p>
+          
+          <div className="flex gap-3">
+            <button
+              onClick={onConfirm}
+              disabled={isDeleting}
+              className="flex-1 bg-red-600 text-white py-2 rounded-lg font-medium hover:bg-red-700 transition disabled:opacity-50"
+            >
+              {isDeleting ? 'Deleting...' : 'Yes, Delete'}
+            </button>
+            <button
+              onClick={onClose}
+              className="flex-1 border border-gray-200 py-2 rounded-lg hover:bg-gray-50 transition"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function EmployeesPage() {
   const { user } = useAuthStore();
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -75,6 +127,7 @@ export default function EmployeesPage() {
   const [showModal, setShowModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
+  const [showPaymentHistory, setShowPaymentHistory] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
@@ -83,7 +136,6 @@ export default function EmployeesPage() {
   const [employmentFilter, setEmploymentFilter] = useState('all');
   const [departmentFilter, setDepartmentFilter] = useState('all');
 
-  // Form state
   const [formData, setFormData] = useState({
     first_name: '',
     last_name: '',
@@ -93,7 +145,7 @@ export default function EmployeesPage() {
     gender: '',
     date_of_birth: '',
     job_title: '',
-    employment_type: 'full_time' as 'full_time' | 'part_time' | 'contract' | 'intern',
+    employment_type: 'full_time',
     hire_date: new Date().toISOString().split('T')[0],
     commission_rate: '',
     bank_name: '',
@@ -106,7 +158,6 @@ export default function EmployeesPage() {
     is_active: true,
   });
 
-  // Pagination
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
@@ -126,7 +177,6 @@ export default function EmployeesPage() {
       let employeesData = employeesRes.data.results || employeesRes.data || [];
       const departmentsData = departmentsRes.data.results || departmentsRes.data || [];
       
-      // Apply filters
       if (statusFilter !== 'all') {
         employeesData = employeesData.filter((e: Employee) => 
           statusFilter === 'active' ? e.is_active : !e.is_active
@@ -138,7 +188,7 @@ export default function EmployeesPage() {
       if (employmentFilter !== 'all') {
         employeesData = employeesData.filter((e: Employee) => e.employment_type === employmentFilter);
       }
-      if (departmentFilter !== 'all') {
+      if (departmentFilter !== 'all' && departmentFilter) {
         employeesData = employeesData.filter((e: Employee) => e.department === parseInt(departmentFilter));
       }
       
@@ -163,9 +213,8 @@ export default function EmployeesPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Required fields validation
     if (!formData.first_name || !formData.last_name || !formData.email || !formData.phone || !formData.job_title) {
-      toast.error('Please fill all required fields: First Name, Last Name, Email, Phone, and Job Title');
+      toast.error('Please fill all required fields');
       return;
     }
 
@@ -194,8 +243,6 @@ export default function EmployeesPage() {
         is_active: formData.is_active,
       };
 
-      console.log('Submitting data:', submitData);
-
       if (selectedEmployee) {
         await hrApi.updateEmployee(selectedEmployee.id, submitData);
         toast.success('Employee updated successfully');
@@ -209,7 +256,6 @@ export default function EmployeesPage() {
       fetchData();
     } catch (error: any) {
       console.error('Failed to save employee:', error);
-      console.error('Error response:', error.response?.data);
       toast.error(error.response?.data?.message || 'Failed to save employee');
     } finally {
       setIsSubmitting(false);
@@ -222,7 +268,7 @@ export default function EmployeesPage() {
     
     try {
       await hrApi.deleteEmployee(selectedEmployee.id);
-      toast.success('Employee deleted successfully');
+      toast.success(`${selectedEmployee.first_name} ${selectedEmployee.last_name} has been deleted`);
       setShowDeleteModal(false);
       setSelectedEmployee(null);
       fetchData();
@@ -232,6 +278,11 @@ export default function EmployeesPage() {
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const openDeleteModal = (employee: Employee) => {
+    setSelectedEmployee(employee);
+    setShowDeleteModal(true);
   };
 
   const openCreateModal = () => {
@@ -271,8 +322,8 @@ export default function EmployeesPage() {
       gender: employee.gender || '',
       date_of_birth: employee.date_of_birth?.split('T')[0] || '',
       job_title: employee.job_title || '',
-      employment_type: employee.employment_type,
-      hire_date: employee.hire_date?.split('T')[0] || '',
+      employment_type: employee.employment_type || 'full_time',
+      hire_date: employee.hire_date?.split('T')[0] || new Date().toISOString().split('T')[0],
       commission_rate: employee.commission_rate || '0',
       bank_name: employee.bank_name || '',
       bank_account_number: employee.bank_account_number || '',
@@ -289,6 +340,11 @@ export default function EmployeesPage() {
   const openViewModal = (employee: Employee) => {
     setSelectedEmployee(employee);
     setShowViewModal(true);
+  };
+
+  const openPaymentHistory = (employee: Employee) => {
+    setSelectedEmployee(employee);
+    setShowPaymentHistory(true);
   };
 
   const resetForm = () => {
@@ -328,7 +384,13 @@ export default function EmployeesPage() {
       contract: 'Contract',
       intern: 'Intern',
     };
-    return labels[type] || type;
+    return labels[type] || type || 'N/A';
+  };
+
+  const getGenderLabel = (gender: string) => {
+    if (gender === 'M') return 'Male';
+    if (gender === 'F') return 'Female';
+    return 'Not specified';
   };
 
   const getStatusBadge = (isActive: boolean) => {
@@ -443,9 +505,9 @@ export default function EmployeesPage() {
         <div className="bg-white rounded-xl p-4 border border-gray-200">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs text-gray-500">Commission Rate</p>
+              <p className="text-xs text-gray-500">Avg Commission</p>
               <p className="text-2xl font-bold text-amber-600">
-                {employees.reduce((sum, e) => sum + (parseFloat(e.commission_rate) || 0), 0)}%
+                {(employees.reduce((sum, e) => sum + (parseFloat(e.commission_rate) || 0), 0) / (employees.length || 1)).toFixed(1)}%
               </p>
             </div>
             <div className="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center">
@@ -619,10 +681,14 @@ export default function EmployeesPage() {
                           <FiEdit2 size={16} />
                         </button>
                         <button
-                          onClick={() => {
-                            setSelectedEmployee(employee);
-                            setShowDeleteModal(true);
-                          }}
+                          onClick={() => openPaymentHistory(employee)}
+                          className="p-1.5 text-gray-400 hover:text-purple-600 rounded-lg hover:bg-purple-50 transition"
+                          title="Payment History"
+                        >
+                          <FiCalendar size={16} />
+                        </button>
+                        <button
+                          onClick={() => openDeleteModal(employee)}
                           className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition"
                           title="Delete"
                         >
@@ -680,7 +746,6 @@ export default function EmployeesPage() {
             </div>
 
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
-              {/* Business Info Display */}
               <div className="p-3 bg-gray-50 rounded-lg mb-2">
                 <p className="text-xs text-gray-500">Business</p>
                 <p className="text-sm font-medium text-gray-900">{user?.business_name || 'N/A'}</p>
@@ -829,7 +894,8 @@ export default function EmployeesPage() {
                     Commission Rate (%)
                   </label>
                   <input
-                    type="text"
+                    type="number"
+                    step="0.1"
                     name="commission_rate"
                     value={formData.commission_rate}
                     onChange={handleInputChange}
@@ -915,7 +981,6 @@ export default function EmployeesPage() {
                 <input
                   type="checkbox"
                   id="is_active"
-                  name="is_active"
                   checked={formData.is_active}
                   onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
                   className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
@@ -961,6 +1026,7 @@ export default function EmployeesPage() {
             </div>
 
             <div className="p-6">
+              {/* Header with Avatar */}
               <div className="flex items-center gap-4 mb-6 pb-4 border-b">
                 <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl flex items-center justify-center text-white text-2xl font-bold shadow-lg">
                   {selectedEmployee.first_name?.[0]}{selectedEmployee.last_name?.[0]}
@@ -972,11 +1038,16 @@ export default function EmployeesPage() {
                 </div>
               </div>
 
+              {/* Personal Information */}
               <div className="mb-6">
                 <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
                   <FiUser size={16} /> Personal Information
                 </h4>
                 <div className="grid grid-cols-2 gap-4 bg-gray-50 p-4 rounded-lg">
+                  <div>
+                    <p className="text-xs text-gray-500">Full Name</p>
+                    <p className="text-sm text-gray-900">{selectedEmployee.first_name} {selectedEmployee.last_name}</p>
+                  </div>
                   <div>
                     <p className="text-xs text-gray-500">Email</p>
                     <p className="text-sm text-gray-900">{selectedEmployee.email}</p>
@@ -987,7 +1058,7 @@ export default function EmployeesPage() {
                   </div>
                   <div>
                     <p className="text-xs text-gray-500">Gender</p>
-                    <p className="text-sm text-gray-900">{selectedEmployee.gender === 'M' ? 'Male' : selectedEmployee.gender === 'F' ? 'Female' : 'N/A'}</p>
+                    <p className="text-sm text-gray-900">{getGenderLabel(selectedEmployee.gender)}</p>
                   </div>
                   <div>
                     <p className="text-xs text-gray-500">Date of Birth</p>
@@ -1000,6 +1071,7 @@ export default function EmployeesPage() {
                 </div>
               </div>
 
+              {/* Employment Information */}
               <div className="mb-6">
                 <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
                   <FiBriefcase size={16} /> Employment Information
@@ -1028,10 +1100,11 @@ export default function EmployeesPage() {
                 </div>
               </div>
 
+              {/* Bank Details */}
               {(selectedEmployee.bank_name || selectedEmployee.bank_account_number) && (
                 <div className="mb-6">
                   <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                    <FaMoneyBillWave size={16} /> Bank Details
+                    <FiCreditCard size={16} /> Bank Details
                   </h4>
                   <div className="grid grid-cols-2 gap-4 bg-gray-50 p-4 rounded-lg">
                     <div>
@@ -1041,6 +1114,40 @@ export default function EmployeesPage() {
                     <div>
                       <p className="text-xs text-gray-500">Account Number</p>
                       <p className="text-sm text-gray-900">{selectedEmployee.bank_account_number || 'N/A'}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Emergency Contact */}
+              {(selectedEmployee.emergency_contact_name || selectedEmployee.emergency_contact_phone) && (
+                <div className="mb-6">
+                  <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                    <FiSmartphone size={16} /> Emergency Contact
+                  </h4>
+                  <div className="grid grid-cols-2 gap-4 bg-gray-50 p-4 rounded-lg">
+                    <div>
+                      <p className="text-xs text-gray-500">Contact Name</p>
+                      <p className="text-sm text-gray-900">{selectedEmployee.emergency_contact_name || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500">Contact Phone</p>
+                      <p className="text-sm text-gray-900">{selectedEmployee.emergency_contact_phone || 'N/A'}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Tax Information */}
+              {selectedEmployee.tin_number && (
+                <div className="mb-6">
+                  <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                    <FiFileText size={16} /> Tax Information
+                  </h4>
+                  <div className="grid grid-cols-2 gap-4 bg-gray-50 p-4 rounded-lg">
+                    <div>
+                      <p className="text-xs text-gray-500">TIN Number</p>
+                      <p className="text-sm text-gray-900">{selectedEmployee.tin_number}</p>
                     </div>
                   </div>
                 </div>
@@ -1069,44 +1176,35 @@ export default function EmployeesPage() {
       )}
 
       {/* Delete Confirmation Modal */}
-      {showDeleteModal && selectedEmployee && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full">
-            <div className="p-4 border-b border-gray-200 flex justify-between items-center">
-              <h3 className="text-lg font-semibold flex items-center gap-2">
-                <FiAlertCircle className="text-red-500" size={20} />
-                Confirm Delete
-              </h3>
-              <button
-                onClick={() => setShowDeleteModal(false)}
-                className="p-1 text-gray-400 hover:text-gray-600"
-              >
-                <FiX size={20} />
-              </button>
-            </div>
-            <div className="p-6">
-              <p className="text-gray-700 mb-2">
-                Are you sure you want to delete <span className="font-semibold">{selectedEmployee.first_name} {selectedEmployee.last_name}</span>?
-              </p>
-              <p className="text-sm text-gray-500 mb-6">This action cannot be undone.</p>
-              <div className="flex gap-3">
-                <button
-                  onClick={handleDelete}
-                  disabled={isSubmitting}
-                  className="flex-1 bg-red-600 text-white py-2 rounded-lg font-medium hover:bg-red-700 transition disabled:opacity-50"
-                >
-                  {isSubmitting ? 'Deleting...' : 'Yes, Delete'}
-                </button>
-                <button
-                  onClick={() => setShowDeleteModal(false)}
-                  className="flex-1 border border-gray-200 py-2 rounded-lg hover:bg-gray-50 transition"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+      <DeleteEmployeeModal
+        isOpen={showDeleteModal}
+        onClose={() => {
+          setShowDeleteModal(false);
+          setSelectedEmployee(null);
+        }}
+        onConfirm={handleDelete}
+        employeeName={selectedEmployee ? `${selectedEmployee.first_name} ${selectedEmployee.last_name}` : ''}
+        isDeleting={isSubmitting}
+      />
+
+      {/* Payment History Modal */}
+      {showPaymentHistory && selectedEmployee && (
+        <EmployeePaymentHistory
+          isOpen={showPaymentHistory}
+          onClose={() => {
+            setShowPaymentHistory(false);
+            setSelectedEmployee(null);
+          }}
+          employee={{
+            id: selectedEmployee.id,
+            employee_number: selectedEmployee.employee_number,
+            first_name: selectedEmployee.first_name,
+            last_name: selectedEmployee.last_name,
+            full_name: selectedEmployee.full_name || `${selectedEmployee.first_name} ${selectedEmployee.last_name}`,
+            job_title: selectedEmployee.job_title,
+            department_name: selectedEmployee.department_name,
+          }}
+        />
       )}
     </div>
   );

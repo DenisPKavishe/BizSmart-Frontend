@@ -59,6 +59,9 @@ export default function ProductsPage() {
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [filterLowStock, setFilterLowStock] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [productToDelete, setProductToDelete] = useState<Product | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -148,6 +151,29 @@ export default function ProductsPage() {
     setShowModal(true);
   };
 
+  const openDeleteModal = (product: Product) => {
+    setProductToDelete(product);
+    setShowDeleteModal(true);
+  };
+
+  const handleDelete = async () => {
+    if (!productToDelete) return;
+    
+    setIsDeleting(true);
+    try {
+      await inventoryApi.deleteProduct(productToDelete.id);
+      toast.success('Product deleted successfully');
+      fetchData();
+      setShowDeleteModal(false);
+      setProductToDelete(null);
+    } catch (error) {
+      console.error('Failed to delete product:', error);
+      toast.error('Failed to delete product');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -184,19 +210,6 @@ export default function ProductsPage() {
       toast.error(error.response?.data?.message || 'Failed to save product');
     } finally {
       setIsSubmitting(false);
-    }
-  };
-
-  const handleDelete = async (product: Product) => {
-    if (confirm(`Delete "${product.name}"? This action cannot be undone.`)) {
-      try {
-        await inventoryApi.deleteProduct(product.id);
-        toast.success('Product deleted successfully');
-        fetchData();
-      } catch (error) {
-        console.error('Failed to delete product:', error);
-        toast.error('Failed to delete product');
-      }
     }
   };
 
@@ -384,7 +397,7 @@ export default function ProductsPage() {
                           <FiEdit2 size={16} />
                         </button>
                         <button
-                          onClick={() => handleDelete(product)}
+                          onClick={() => openDeleteModal(product)}
                           className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition"
                           title="Delete"
                         >
@@ -610,6 +623,41 @@ export default function ProductsPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && productToDelete && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full">
+            <div className="p-6">
+              <div className="flex items-center justify-center w-12 h-12 mx-auto bg-red-100 rounded-full mb-4">
+                <FiTrash2 className="text-red-600" size={24} />
+              </div>
+              <h3 className="text-lg font-semibold text-center text-gray-900 mb-2">
+                Delete Product
+              </h3>
+              <p className="text-center text-gray-500 mb-6">
+                Are you sure you want to delete <span className="font-semibold text-gray-900">"{productToDelete.name}"</span>?<br />
+                This action cannot be undone.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowDeleteModal(false)}
+                  className="flex-1 px-4 py-2 border border-gray-200 rounded-lg text-gray-700 hover:bg-gray-50 transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleDelete}
+                  disabled={isDeleting}
+                  className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition disabled:opacity-50"
+                >
+                  {isDeleting ? 'Deleting...' : 'Delete'}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

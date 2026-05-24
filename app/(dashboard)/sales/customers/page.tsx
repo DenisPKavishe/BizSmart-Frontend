@@ -37,6 +37,9 @@ export default function CustomersPage() {
   const [showModal, setShowModal] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [customerToDelete, setCustomerToDelete] = useState<Customer | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -109,6 +112,29 @@ export default function CustomersPage() {
     setShowModal(true);
   };
 
+  const openDeleteModal = (customer: Customer) => {
+    setCustomerToDelete(customer);
+    setShowDeleteModal(true);
+  };
+
+  const handleDelete = async () => {
+    if (!customerToDelete) return;
+    
+    setIsDeleting(true);
+    try {
+      await salesApi.deleteCustomer(customerToDelete.id);
+      toast.success('Customer deleted successfully');
+      fetchCustomers();
+      setShowDeleteModal(false);
+      setCustomerToDelete(null);
+    } catch (error: any) {
+      console.error('Failed to delete customer:', error);
+      toast.error(error.response?.data?.error || 'Failed to delete customer');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -135,19 +161,6 @@ export default function CustomersPage() {
       toast.error(error.response?.data?.message || 'Failed to save customer');
     } finally {
       setIsSubmitting(false);
-    }
-  };
-
-  const handleDelete = async (customer: Customer) => {
-    if (confirm(`Delete customer "${customer.name}"? This will also delete their sales history.`)) {
-      try {
-        await salesApi.deleteCustomer(customer.id);
-        toast.success('Customer deleted successfully');
-        fetchCustomers();
-      } catch (error:any) {
-        console.error('Failed to delete customer:', error);
-        toast.error(error.response?.data?.error || 'Failed to delete customer');
-      }
     }
   };
 
@@ -302,7 +315,7 @@ export default function CustomersPage() {
                       <FiEdit2 size={16} />
                     </button>
                     <button
-                      onClick={() => handleDelete(customer)}
+                      onClick={() => openDeleteModal(customer)}
                       className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition"
                       title="Delete"
                     >
@@ -412,6 +425,41 @@ export default function CustomersPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && customerToDelete && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full">
+            <div className="p-6">
+              <div className="flex items-center justify-center w-12 h-12 mx-auto bg-red-100 rounded-full mb-4">
+                <FiTrash2 className="text-red-600" size={24} />
+              </div>
+              <h3 className="text-lg font-semibold text-center text-gray-900 mb-2">
+                Delete Customer
+              </h3>
+              <p className="text-center text-gray-500 mb-6">
+                Are you sure you want to delete <span className="font-semibold text-gray-900">"{customerToDelete.name}"</span>?<br />
+                This will also delete their sales history and cannot be undone.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowDeleteModal(false)}
+                  className="flex-1 px-4 py-2 border border-gray-200 rounded-lg text-gray-700 hover:bg-gray-50 transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleDelete}
+                  disabled={isDeleting}
+                  className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition disabled:opacity-50"
+                >
+                  {isDeleting ? 'Deleting...' : 'Delete'}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

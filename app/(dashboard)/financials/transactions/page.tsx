@@ -40,6 +40,9 @@ export default function TransactionsPage() {
   const [showModal, setShowModal] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [transactionToDelete, setTransactionToDelete] = useState<Transaction | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   
   // Filters
   const [showFilters, setShowFilters] = useState(false);
@@ -145,6 +148,29 @@ export default function TransactionsPage() {
     setShowModal(true);
   };
 
+  const openDeleteModal = (transaction: Transaction) => {
+    setTransactionToDelete(transaction);
+    setShowDeleteModal(true);
+  };
+
+  const handleDelete = async () => {
+    if (!transactionToDelete) return;
+    
+    setIsDeleting(true);
+    try {
+      await financialsApi.deleteTransaction(transactionToDelete.id);
+      toast.success('Transaction deleted successfully');
+      fetchTransactions();
+      setShowDeleteModal(false);
+      setTransactionToDelete(null);
+    } catch (error) {
+      console.error('Failed to delete transaction:', error);
+      toast.error('Failed to delete transaction');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -185,19 +211,6 @@ export default function TransactionsPage() {
       toast.error(error.response?.data?.message || 'Failed to save transaction');
     } finally {
       setIsSubmitting(false);
-    }
-  };
-
-  const handleDelete = async (transaction: Transaction) => {
-    if (confirm(`Delete this ${transaction.type} transaction of ${formatCurrency(transaction.amount)}?`)) {
-      try {
-        await financialsApi.deleteTransaction(transaction.id);
-        toast.success('Transaction deleted successfully');
-        fetchTransactions();
-      } catch (error) {
-        console.error('Failed to delete transaction:', error);
-        toast.error('Failed to delete transaction');
-      }
     }
   };
 
@@ -412,7 +425,7 @@ export default function TransactionsPage() {
                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Amount</th>
                 <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Type</th>
                 <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Actions</th>
-                </tr>
+              </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {filteredTransactions.length === 0 ? (
@@ -457,7 +470,7 @@ export default function TransactionsPage() {
                           <FiEdit2 size={16} />
                         </button>
                         <button
-                          onClick={() => handleDelete(transaction)}
+                          onClick={() => openDeleteModal(transaction)}
                           className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition"
                           title="Delete"
                         >
@@ -675,6 +688,42 @@ export default function TransactionsPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && transactionToDelete && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full">
+            <div className="p-6">
+              <div className="flex items-center justify-center w-12 h-12 mx-auto bg-red-100 rounded-full mb-4">
+                <FiTrash2 className="text-red-600" size={24} />
+              </div>
+              <h3 className="text-lg font-semibold text-center text-gray-900 mb-2">
+                Delete Transaction
+              </h3>
+              <p className="text-center text-gray-500 mb-6">
+                Are you sure you want to delete this <span className="font-semibold text-gray-900">{transactionToDelete.type_display}</span> transaction of{' '}
+                <span className="font-semibold text-gray-900">{formatCurrency(transactionToDelete.amount)}</span>?<br />
+                This action cannot be undone.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowDeleteModal(false)}
+                  className="flex-1 px-4 py-2 border border-gray-200 rounded-lg text-gray-700 hover:bg-gray-50 transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleDelete}
+                  disabled={isDeleting}
+                  className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition disabled:opacity-50"
+                >
+                  {isDeleting ? 'Deleting...' : 'Delete'}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
