@@ -9,6 +9,18 @@ export const authApi = {
   register: (data: any) => 
     api.post('/auth/register/', data),
   
+  getUsers: () => 
+    api.get('/auth/users/'),
+  
+  updateUser: (userId: number, data: any) => 
+    api.patch(`/auth/users/${userId}/`, data),
+  
+  deleteUser: (userId: number) => 
+    api.delete(`/auth/users/${userId}/`),  
+
+  changePassword: (data: { email: string; current_password: string; new_password: string }) => 
+    api.post('/auth/password-reset/', data),  
+  
   logout: (refreshToken: string) => 
     api.post('/auth/logout/', { refresh: refreshToken }),
   
@@ -18,7 +30,7 @@ export const authApi = {
   getProfile: () => 
     api.get('/auth/profile/'),
   
-  updateProfile: (data: any) => 
+  updateProfile: (data: { username?: string; phone?: string }) => 
     api.patch('/auth/profile/', data),
 };
 
@@ -186,18 +198,19 @@ export const inventoryApi = {
     api.get('/inventory/stock/movements/'),
   
   // Purchase Orders
-  getPurchaseOrders: () => 
-    api.get('/inventory/purchase-orders/'),
+  getPurchaseOrders: () => api.get('/inventory/purchase-orders/'),
   
-  createPurchaseOrder: (data: any) => 
-    api.post('/inventory/purchase-orders/', data),
+  getPurchaseOrder: (id: number) => api.get(`/inventory/purchase-orders/${id}/`),
   
-  receivePurchaseOrder: (id: number) => 
-    api.post(`/inventory/purchase-orders/${id}/receive/`),
+  createPurchaseOrder: (data: any) => api.post('/inventory/purchase-orders/', data),
   
-  getInventoryValue: () => 
-    api.get('/inventory/products/', { params: { page_size: 1000 } }),  
-};
+  updatePurchaseOrder: (id: number, data: any) => api.put(`/inventory/purchase-orders/${id}/`, data),
+  
+  deletePurchaseOrder: (id: number) => api.delete(`/inventory/purchase-orders/${id}/`),
+  
+  receivePurchaseOrderItem: (poId: number, data: any) => 
+    api.post(`/inventory/purchase-orders/${poId}/receive/`, data),
+};  
 
 // ==================== SALES ====================
 export const salesApi = {
@@ -227,12 +240,21 @@ export const salesApi = {
   getReceipt: (id: number) => 
     api.get(`/sales/sales/${id}/receipt/`),
   
-  // Returns
-  getReturns: () => 
-    api.get('/sales/returns/'),
-  
-  processReturn: (data: any) => 
-    api.post('/sales/returns/process/', data),
+  // Returns Management
+  getReturns: (params?: any) => 
+    api.get('/sales/returns/', { params }),
+
+  getReturn: (id: number) => 
+    api.get(`/sales/returns/${id}/`),
+
+  createReturn: (data: any) => 
+    api.post('/sales/returns/', data),
+
+  updateReturn: (id: number, data: any) => 
+    api.put(`/sales/returns/${id}/`, data),
+
+  deleteReturn: (id: number) => 
+    api.delete(`/sales/returns/${id}/`),
   
   // Reports
   getDailySalesReport: (days: number = 7) => 
@@ -255,6 +277,13 @@ export const salesApi = {
 
   getSalesByDateRange: (startDate: string, endDate: string) => 
     api.get('/sales/sales/', { params: { start_date: startDate, end_date: endDate, page_size: 1000 } }),  
+
+  getSaleItems: () => api.get('/sales/items/'),
+  getSaleItem: (id: number) => api.get(`/sales/items/${id}/`),
+  createSaleItem: (data: any) => api.post('/sales/items/', data),
+  updateSaleItem: (id: number, data: any) => api.put(`/sales/items/${id}/`, data),
+  patchSaleItem: (id: number, data: any) => api.patch(`/sales/items/${id}/`, data),
+  deleteSaleItem: (id: number) => api.delete(`/sales/items/${id}/`),  
 };
 
 // // ==================== HR ====================
@@ -324,7 +353,11 @@ export const salesApi = {
 export const hrApi = {
   // Departments
   getDepartments: () => api.get('/hr/departments/'),
+  getDepartment: (id: number) => api.get(`/hr/departments/${id}/`),
   createDepartment: (data: any) => api.post('/hr/departments/', data),
+  updateDepartment: (id: number, data: any) => api.put(`/hr/departments/${id}/`, data),
+  patchDepartment: (id: number, data: any) => api.patch(`/hr/departments/${id}/`, data),
+  deleteDepartment: (id: number) => api.delete(`/hr/departments/${id}/`),
   
   // Employees
   getEmployees: () => api.get('/hr/employees/'),

@@ -494,9 +494,9 @@ export default function DashboardPage() {
                           <p className="text-sm font-medium text-gray-700">{reorderLvl} units</p>
                         </div>
                       </div>
-                      <button className="text-xs text-brand-600 hover:text-brand-700 font-medium">
+                      <Link href='inventory/stock' className="text-xs text-brand-600 hover:text-brand-700 font-medium">
                         Reorder →
-                      </button>
+                      </Link>
                     </div>
                     <div className="mt-2 w-full bg-gray-200 rounded-full h-1.5">
                       <div 

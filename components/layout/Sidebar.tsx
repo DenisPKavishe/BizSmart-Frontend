@@ -663,6 +663,7 @@ import {
   FiGrid,
   FiChevronDown,
   FiChevronRight,
+  FiUser,
 } from 'react-icons/fi';
 
 // Navigation items with submenu structure
@@ -673,8 +674,10 @@ const navItems = [
     name: 'Sales',
     icon: FiFileText,
     subItems: [
+      { name: 'Sales Items', href: '/sales/items' },
       { name: 'Sales History', href: '/sales/history' },
       { name: 'Customers', href: '/sales/customers' },
+      { name: 'Returns', href: '/sales/returns' },
     ],
   },
   {
@@ -685,6 +688,8 @@ const navItems = [
       { name: 'Categories', href: '/inventory/categories' },
       { name: 'Suppliers', href: '/inventory/suppliers' },
       { name: 'Stock', href: '/inventory/stock' },
+      { name: 'Purchase Order', href: '/inventory/purchase-orders' },
+      { name: 'Stock Movement', href: '/inventory/stock-movements' },
     ],
   },
   {
@@ -701,6 +706,7 @@ const navItems = [
     name: 'HR',
     icon: FiUsers,
     subItems: [
+      { name: 'Departments', href: '/hr/departments' },
       { name: 'Employees', href: '/hr/employees' },
       { name: 'Payroll', href: '/hr/payroll' },
       { name: 'Salaries', href: '/hr/salaries' },
@@ -715,6 +721,8 @@ const navItems = [
       { name: 'Reports', href: '/reports' },
     ],
   },
+  { name: 'User Management', href: '/users', icon: FiUsers },
+  { name: 'Profile', href: '/profile', icon: FiUser },
 ];
 
 interface SidebarProps {

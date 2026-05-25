@@ -638,9 +638,9 @@ export default function EmployeesPage() {
                   <tr key={employee.id} className="hover:bg-gray-50 transition">
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center text-white font-semibold">
+                        {/* <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center text-white font-semibold">
                           {employee.first_name?.[0]}{employee.last_name?.[0]}
-                        </div>
+                        </div> */}
                         <div>
                           <p className="font-medium text-gray-900">{employee.first_name} {employee.last_name}</p>
                           <p className="text-xs text-gray-500">#{employee.employee_number}</p>

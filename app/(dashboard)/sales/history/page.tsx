@@ -1,4 +1,5 @@
-// app/(dashboard)/sales/history/page.tsx
+// app/(dashboard)/sales/history/page.tsx - COMPLETE WITH PROPER CLOSING TAGS
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -14,11 +15,15 @@ import {
   FiFilter,
   FiRefreshCw,
   FiX,
+  FiPackage,
 } from 'react-icons/fi';
+import ProcessReturnModal from '@/components/sales/ProcessReturnModal';
 
+// SaleItem interface with product_sku
 interface SaleItem {
   id: number;
   product_name: string;
+  product_sku: string;
   quantity: number;
   unit_price: number;
   total_price: number;
@@ -49,6 +54,8 @@ export default function SalesHistoryPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
+  const [showReturnModal, setShowReturnModal] = useState(false);
+  const [selectedSaleForReturn, setSelectedSaleForReturn] = useState<Sale | null>(null);
   
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -128,6 +135,25 @@ export default function SalesHistoryPage() {
     }
   };
 
+  const openReturnModal = async (saleId: number) => {
+    try {
+      const response = await salesApi.getSale(saleId);
+      const saleData = response.data;
+      if (!saleData.items) {
+        saleData.items = [];
+      }
+      saleData.items = saleData.items.map((item: any) => ({
+        ...item,
+        product_sku: item.product_sku || item.sku || `SKU-${item.id}`
+      }));
+      setSelectedSaleForReturn(saleData);
+      setShowReturnModal(true);
+    } catch (error) {
+      console.error('Failed to fetch sale details:', error);
+      toast.error('Failed to load sale details');
+    }
+  };
+
   const printReceipt = (sale: Sale) => {
     try {
       const printWindow = window.open('', '_blank', 'width=400,height=600');
@@ -200,7 +226,7 @@ export default function SalesHistoryPage() {
                   <td>${formatCurrencyPrint(item.unit_price)}</td>
                   <td>${formatCurrencyPrint(item.total_price)}</td>
                 </tr>
-              `).join('') || '<tr><td colspan="4">No items</td</tr>'}
+              `).join('') || '<tr><td colspan="4">No items</td</td>'}
             </tbody>
           </table>
           
@@ -403,7 +429,9 @@ export default function SalesHistoryPage() {
             </thead>
             <tbody className="divide-y divide-gray-100">
               {filteredSales.length === 0 ? (
-                <tr><td colSpan={7} className="px-6 py-12 text-center text-gray-500">No sales found</td></tr>
+                <tr>
+                  <td colSpan={7} className="px-6 py-12 text-center text-gray-500">No sales found</td>
+                </tr>
               ) : (
                 filteredSales.map((sale) => (
                   <tr key={sale.id} className="hover:bg-gray-50 transition">
@@ -421,6 +449,11 @@ export default function SalesHistoryPage() {
                         <button onClick={() => printReceipt(sale)} className="p-1.5 text-gray-400 hover:text-brand-600 rounded-lg hover:bg-brand-50 transition" title="Print Receipt">
                           <FiPrinter size={16} />
                         </button>
+                        {sale.status === 'completed' && (
+                          <button onClick={() => openReturnModal(sale.id)} className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition" title="Process Return">
+                            <FiPackage size={16} />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -465,14 +498,28 @@ export default function SalesHistoryPage() {
                 <h4 className="font-medium text-gray-900 mb-3">Items</h4>
                 <div className="overflow-x-auto">
                   <table className="w-full">
-                    <thead className="bg-gray-50"><tr><th className="px-4 py-2 text-left text-xs">Product</th><th className="px-4 py-2 text-center text-xs">Qty</th><th className="px-4 py-2 text-right text-xs">Price</th><th className="px-4 py-2 text-right text-xs">Total</th></tr></thead>
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-4 py-2 text-left text-xs">Product</th>
+                        <th className="px-4 py-2 text-center text-xs">Qty</th>
+                        <th className="px-4 py-2 text-right text-xs">Price</th>
+                        <th className="px-4 py-2 text-right text-xs">Total</th>
+                      </tr>
+                    </thead>
                     <tbody className="divide-y divide-gray-100">
                       {selectedSale.items && selectedSale.items.length > 0 ? (
                         selectedSale.items.map((item, idx) => (
-                          <tr key={idx}><td className="px-4 py-2 text-sm">{item.product_name}</td><td className="px-4 py-2 text-center text-sm">{item.quantity}</td><td className="px-4 py-2 text-right text-sm">{formatCurrency(item.unit_price)}</td><td className="px-4 py-2 text-right text-sm font-medium">{formatCurrency(item.total_price)}</td></tr>
+                          <tr key={idx}>
+                            <td className="px-4 py-2 text-sm">{item.product_name}</td>
+                            <td className="px-4 py-2 text-center text-sm">{item.quantity}</td>
+                            <td className="px-4 py-2 text-right text-sm">{formatCurrency(item.unit_price)}</td>
+                            <td className="px-4 py-2 text-right text-sm font-medium">{formatCurrency(item.total_price)}</td>
+                          </tr>
                         ))
                       ) : (
-                        <tr><td colSpan={4} className="px-4 py-4 text-center text-gray-500">No items available</td></tr>
+                        <tr>
+                          <td colSpan={4} className="px-4 py-4 text-center text-gray-500">No items available</td>
+                        </tr>
                       )}
                     </tbody>
                   </table>
@@ -488,11 +535,32 @@ export default function SalesHistoryPage() {
 
               <div className="flex gap-3 pt-4">
                 <button onClick={() => printReceipt(selectedSale)} className="flex-1 border border-gray-200 py-2 rounded-lg flex items-center justify-center gap-2 hover:bg-gray-50 transition"><FiPrinter size={16} /> Print Receipt</button>
+                {selectedSale.status === 'completed' && (
+                  <button onClick={() => {
+                    setShowDetailModal(false);
+                    openReturnModal(selectedSale.id);
+                  }} className="flex-1 bg-red-600 text-white py-2 rounded-lg hover:bg-red-700 transition">Process Return</button>
+                )}
                 <button onClick={() => setShowDetailModal(false)} className="flex-1 bg-brand-500 text-white py-2 rounded-lg hover:bg-brand-600 transition">Close</button>
               </div>
             </div>
           </div>
         </div>
+      )}
+
+      {/* Process Return Modal */}
+      {showReturnModal && selectedSaleForReturn && (
+        <ProcessReturnModal
+          isOpen={showReturnModal}
+          onClose={() => {
+            setShowReturnModal(false);
+            setSelectedSaleForReturn(null);
+          }}
+          sale={selectedSaleForReturn}
+          onSuccess={() => {
+            fetchSales();
+          }}
+        />
       )}
     </div>
   );
