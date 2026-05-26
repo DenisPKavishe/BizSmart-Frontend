@@ -1,4 +1,4 @@
-// app/(dashboard)/sales/returns/page.tsx - CORRECTED VERSION
+// app/(dashboard)/sales/returns/page.tsx - COMPLETE CORRECTED VERSION
 
 'use client';
 
@@ -16,7 +16,11 @@ import {
   FiArrowLeft,
   FiArrowRight,
   FiAlertCircle,
+  FiCalendar,
+  FiPackage,
+  FiDollarSign,
 } from 'react-icons/fi';
+import { FaMoneyBillWave, FaBoxOpen, FaChartLine } from 'react-icons/fa';
 
 interface ReturnItem {
   id: number;
@@ -24,7 +28,7 @@ interface ReturnItem {
   product_name: string;
   reason: string;
   quantity_returned: number;
-  refund_amount: number;
+  refund_amount: number;  // Will be number after normalization
   notes: string;
   created_at: string;
   sale: number;
@@ -32,7 +36,7 @@ interface ReturnItem {
   created_by: number;
 }
 
-// Return Reasons Configuration (without emojis)
+// Return Reasons Configuration
 const returnReasons = [
   { value: 'damaged', label: 'Damaged Product', color: 'bg-red-100 text-red-700' },
   { value: 'wrong_item', label: 'Wrong Item Sent', color: 'bg-orange-100 text-orange-700' },
@@ -87,12 +91,12 @@ function DeleteReturnModal({ isOpen, onClose, onConfirm, returnInfo, isDeleting 
           <p className="text-gray-700 mb-2">
             Are you sure you want to delete this return for <span className="font-semibold text-gray-900">"{returnInfo?.product_name}"</span>?
           </p>
-          <p className="text-sm text-gray-500 mb-6">
-            Invoice: {returnInfo?.sale_invoice}<br />
-            Quantity: {returnInfo?.quantity_returned}<br />
-            Refund Amount: {formatCurrency(returnInfo?.refund_amount || 0)}
-          </p>
-          <p className="text-sm text-red-600 mb-6">Warning: This action cannot be undone.</p>
+          <div className="bg-gray-50 rounded-lg p-3 mb-4 text-sm">
+            <p className="text-gray-600">Invoice: <span className="font-medium">{returnInfo?.sale_invoice}</span></p>
+            <p className="text-gray-600">Quantity: <span className="font-medium">{returnInfo?.quantity_returned}</span></p>
+            <p className="text-gray-600">Refund Amount: <span className="font-medium text-red-600">{formatCurrency(returnInfo?.refund_amount || 0)}</span></p>
+          </div>
+          <p className="text-sm text-red-600 mb-6">⚠️ Warning: This action cannot be undone.</p>
           
           <div className="flex gap-3">
             <button
@@ -120,9 +124,9 @@ function ViewReturnModal({ isOpen, onClose, returnItem }: any) {
   if (!isOpen || !returnItem) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl max-w-md w-full">
-        <div className="p-4 border-b border-gray-200 flex justify-between items-center">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
+      <div className="bg-white rounded-2xl max-w-md w-full my-8">
+        <div className="sticky top-0 bg-white rounded-t-2xl p-4 border-b border-gray-200 flex justify-between items-center">
           <h3 className="text-lg font-semibold">Return Details</h3>
           <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600">
             <FiX size={20} />
@@ -130,42 +134,91 @@ function ViewReturnModal({ isOpen, onClose, returnItem }: any) {
         </div>
         
         <div className="p-6 space-y-4">
-          <div className="bg-gray-50 rounded-lg p-4 space-y-2">
-            <div className="flex justify-between">
-              <span className="text-sm text-gray-500">Invoice Number</span>
-              <span className="text-sm font-medium text-brand-600">{returnItem.sale_invoice}</span>
+          {/* Return Information */}
+          <div className="bg-gray-50 rounded-lg p-4 space-y-3">
+            <h4 className="font-medium text-gray-900 flex items-center gap-2">
+              <FiPackage size={16} />
+              Return Information
+            </h4>
+            <div className="space-y-2">
+              <div className="flex justify-between">
+                <span className="text-sm text-gray-500">Invoice Number</span>
+                <span className="text-sm font-medium text-blue-600">{returnItem.sale_invoice}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-sm text-gray-500">Product</span>
+                <span className="text-sm font-medium">{returnItem.product_name}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-sm text-gray-500">Quantity Returned</span>
+                <span className="text-sm font-medium">{returnItem.quantity_returned}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-sm text-gray-500">Return Date</span>
+                <span className="text-sm">{formatDate(returnItem.created_at)}</span>
+              </div>
             </div>
-            <div className="flex justify-between">
-              <span className="text-sm text-gray-500">Product</span>
-              <span className="text-sm font-medium">{returnItem.product_name}</span>
+          </div>
+
+          {/* Financial Information */}
+          <div className="bg-red-50 rounded-lg p-4 space-y-3">
+            <h4 className="font-medium text-gray-900 flex items-center gap-2">
+              <FaMoneyBillWave size={16} />
+              Financial Information
+            </h4>
+            <div className="space-y-2">
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-gray-600">Refund Amount</span>
+                <span className="text-xl font-bold text-red-600">{formatCurrency(returnItem.refund_amount)}</span>
+              </div>
             </div>
-            <div className="flex justify-between">
-              <span className="text-sm text-gray-500">Quantity Returned</span>
-              <span className="text-sm font-medium">{returnItem.quantity_returned}</span>
+          </div>
+
+          {/* Reason & Notes */}
+          <div className="bg-gray-50 rounded-lg p-4 space-y-3">
+            <h4 className="font-medium text-gray-900 flex items-center gap-2">
+              <FiAlertCircle size={16} />
+              Return Reason
+            </h4>
+            <div>
+              {getReasonBadge(returnItem.reason)}
             </div>
-            <div className="flex justify-between">
-              <span className="text-sm text-gray-500">Refund Amount</span>
-              <span className="text-sm font-bold text-red-600">{formatCurrency(returnItem.refund_amount)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-sm text-gray-500">Return Date</span>
-              <span className="text-sm">{formatDate(returnItem.created_at)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-sm text-gray-500">Reason</span>
-              <span>{getReasonBadge(returnItem.reason)}</span>
-            </div>
+            
             {returnItem.notes && (
-              <div>
-                <p className="text-sm text-gray-500 mb-1">Notes</p>
-                <p className="text-sm text-gray-700 bg-white p-2 rounded">{returnItem.notes}</p>
+              <div className="mt-3">
+                <p className="text-sm text-gray-500 mb-1">Additional Notes</p>
+                <p className="text-sm text-gray-700 bg-white p-2 rounded border border-gray-200">
+                  {returnItem.notes}
+                </p>
               </div>
             )}
+          </div>
+
+          {/* System Information */}
+          <div className="bg-gray-50 rounded-lg p-4 space-y-3">
+            <h4 className="font-medium text-gray-900 flex items-center gap-2">
+              <FiCalendar size={16} />
+              System Information
+            </h4>
+            <div className="space-y-2">
+              <div className="flex justify-between">
+                <span className="text-xs text-gray-500">Return ID</span>
+                <span className="text-xs text-gray-600">#{returnItem.id}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-xs text-gray-500">Sale ID</span>
+                <span className="text-xs text-gray-600">#{returnItem.sale}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-xs text-gray-500">Created By</span>
+                <span className="text-xs text-gray-600">User #{returnItem.created_by}</span>
+              </div>
+            </div>
           </div>
           
           <button
             onClick={onClose}
-            className="w-full border border-gray-200 py-2 rounded-lg hover:bg-gray-50 transition"
+            className="w-full bg-blue-600 text-white py-2 rounded-lg font-medium hover:bg-blue-700 transition"
           >
             Close
           </button>
@@ -193,7 +246,7 @@ export default function ReturnsPage() {
   
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
+  const [itemsPerPage] = useState(20);
   const [totalItems, setTotalItems] = useState(0);
   const [totalRefundAmount, setTotalRefundAmount] = useState(0);
 
@@ -204,7 +257,7 @@ export default function ReturnsPage() {
   const fetchReturns = async () => {
     setIsLoading(true);
     try {
-      const params: any = { page: currentPage, page_size: 20 };
+      const params: any = { page: currentPage, page_size: itemsPerPage };
       if (startDate) params.start_date = startDate;
       if (endDate) params.end_date = endDate;
       if (reasonFilter) params.reason = reasonFilter;
@@ -212,12 +265,19 @@ export default function ReturnsPage() {
       const response = await salesApi.getReturns(params);
       const data = response.data;
       
-      const returnsData = data.results || data || [];
+      // ✅ FIX: Convert refund_amount from string to number immediately after fetch
+      const rawData = data.results || data || [];
+      const returnsData = rawData.map((item: any) => ({
+        ...item,
+        refund_amount: Number(item.refund_amount || 0), // Convert string to number
+        quantity_returned: Number(item.quantity_returned || 0),
+      }));
+      
       setReturns(returnsData);
-      setTotalPages(Math.ceil((data.count || returnsData.length) / 20));
       setTotalItems(data.count || returnsData.length);
       
-      const totalRefund = returnsData.reduce((sum: number, r: ReturnItem) => sum + (r.refund_amount || 0), 0);
+      // ✅ FIX: Now refund_amount is number, so addition works correctly
+      const totalRefund = returnsData.reduce((sum: number, r: ReturnItem) => sum + r.refund_amount, 0);
       setTotalRefundAmount(totalRefund);
       
     } catch (error) {
@@ -264,18 +324,42 @@ export default function ReturnsPage() {
     setCurrentPage(1);
   };
 
+  // Filter by search term
   const filteredReturns = returns.filter(returnItem =>
     returnItem.sale_invoice?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     returnItem.product_name?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const paginatedReturns = filteredReturns.slice((currentPage - 1) * 20, currentPage * 20);
+  // Pagination
+  const totalPages = Math.ceil(filteredReturns.length / itemsPerPage);
+  const paginatedReturns = filteredReturns.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
+
+  // Calculate stats from filtered data
+  const stats = {
+    total: filteredReturns.length,
+    totalRefund: filteredReturns.reduce((sum, r) => sum + r.refund_amount, 0),
+    uniqueProducts: new Set(filteredReturns.map(r => r.product_name)).size,
+    thisMonth: filteredReturns.filter(r => {
+      const returnDate = new Date(r.created_at);
+      const now = new Date();
+      return returnDate.getMonth() === now.getMonth() && 
+             returnDate.getFullYear() === now.getFullYear();
+    }).length,
+  };
 
   if (isLoading && returns.length === 0) {
     return (
       <div className="p-6">
         <div className="animate-pulse space-y-4">
           <div className="h-10 bg-gray-200 rounded w-48"></div>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            {[1, 2, 3, 4].map(i => (
+              <div key={i} className="h-24 bg-gray-100 rounded-xl"></div>
+            ))}
+          </div>
           <div className="h-20 bg-gray-100 rounded-xl"></div>
           <div className="space-y-3">
             {[1, 2, 3, 4, 5].map(i => (
@@ -299,7 +383,7 @@ export default function ReturnsPage() {
           <button
             onClick={() => setShowFilters(!showFilters)}
             className={`flex items-center gap-2 px-4 py-2 border rounded-lg transition ${
-              showFilters ? 'bg-brand-50 border-brand-300 text-brand-600' : 'border-gray-200 hover:bg-gray-50'
+              showFilters ? 'bg-blue-50 border-blue-300 text-blue-600' : 'border-gray-200 hover:bg-gray-50'
             }`}
           >
             <FiFilter size={16} />
@@ -307,7 +391,7 @@ export default function ReturnsPage() {
           </button>
           <button
             onClick={fetchReturns}
-            className="p-2 text-gray-500 hover:text-brand-600 rounded-lg border border-gray-200 hover:border-brand-200 transition"
+            className="p-2 text-gray-500 hover:text-blue-600 rounded-lg border border-gray-200 hover:border-blue-200 transition"
           >
             <FiRefreshCw size={18} />
           </button>
@@ -317,24 +401,48 @@ export default function ReturnsPage() {
       {/* Stats Summary */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
         <div className="bg-white rounded-xl p-4 border border-gray-200">
-          <p className="text-xs text-gray-500">Total Returns</p>
-          <p className="text-2xl font-bold text-gray-900">{totalItems}</p>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs text-gray-500">Total Returns</p>
+              <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
+            </div>
+            <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+              <FiPackage className="text-blue-600" size={20} />
+            </div>
+          </div>
         </div>
         <div className="bg-white rounded-xl p-4 border border-gray-200">
-          <p className="text-xs text-gray-500">Total Refunded</p>
-          <p className="text-2xl font-bold text-red-600">{formatCurrency(totalRefundAmount)}</p>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs text-gray-500">Total Refunded</p>
+              <p className="text-2xl font-bold text-red-600">{formatCurrency(stats.totalRefund)}</p>
+            </div>
+            <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
+              <FaMoneyBillWave className="text-red-600" size={20} />
+            </div>
+          </div>
         </div>
         <div className="bg-white rounded-xl p-4 border border-gray-200">
-          <p className="text-xs text-gray-500">Unique Products</p>
-          <p className="text-2xl font-bold text-brand-600">
-            {new Set(returns.map(r => r.product_name)).size}
-          </p>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs text-gray-500">Products Returned</p>
+              <p className="text-2xl font-bold text-purple-600">{stats.uniqueProducts}</p>
+            </div>
+            <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+              <FaChartLine className="text-purple-600" size={20} />
+            </div>
+          </div>
         </div>
         <div className="bg-white rounded-xl p-4 border border-gray-200">
-          <p className="text-xs text-gray-500">This Month</p>
-          <p className="text-2xl font-bold text-purple-600">
-            {returns.filter(r => new Date(r.created_at).getMonth() === new Date().getMonth()).length}
-          </p>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs text-gray-500">Returns This Month</p>
+              <p className="text-2xl font-bold text-green-600">{stats.thisMonth}</p>
+            </div>
+            <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
+              <FiCalendar className="text-green-600" size={20} />
+            </div>
+          </div>
         </div>
       </div>
 
@@ -348,7 +456,7 @@ export default function ReturnsPage() {
               placeholder="Search by invoice number or product name..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
+              className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
         </div>
@@ -370,7 +478,7 @@ export default function ReturnsPage() {
                 type="date"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
             <div>
@@ -379,7 +487,7 @@ export default function ReturnsPage() {
                 type="date"
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
             <div>
@@ -387,7 +495,7 @@ export default function ReturnsPage() {
               <select
                 value={reasonFilter}
                 onChange={(e) => setReasonFilter(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="">All Reasons</option>
                 {returnReasons.map(reason => (
@@ -407,7 +515,7 @@ export default function ReturnsPage() {
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Invoice</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Product</th>
-                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Qty</th>
+                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Quantity</th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Refund Amount</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Reason</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
@@ -418,20 +526,27 @@ export default function ReturnsPage() {
               {paginatedReturns.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="px-6 py-12 text-center text-gray-500">
-                    No returns found
-                  </td>
+                    <div className="flex flex-col items-center gap-2">
+                      <FiPackage size={48} className="text-gray-300" />
+                      <p>No returns found</p>
+                      <p className="text-xs">Try adjusting your search or filters</p>
+                    </div>
+                   </td>
                 </tr>
               ) : (
                 paginatedReturns.map((returnItem) => (
                   <tr key={returnItem.id} className="hover:bg-gray-50 transition">
                     <td className="px-6 py-4">
-                      <p className="font-medium text-brand-600">{returnItem.sale_invoice}</p>
+                      <p className="font-medium text-blue-600">{returnItem.sale_invoice}</p>
+                      <p className="text-xs text-gray-500">ID: {returnItem.id}</p>
                     </td>
                     <td className="px-6 py-4">
                       <p className="text-sm text-gray-900">{returnItem.product_name}</p>
                     </td>
                     <td className="px-6 py-4 text-center">
-                      <span className="text-sm font-medium">{returnItem.quantity_returned}</span>
+                      <span className="inline-flex items-center justify-center w-8 h-8 bg-gray-100 rounded-full text-sm font-medium">
+                        {returnItem.quantity_returned}
+                      </span>
                     </td>
                     <td className="px-6 py-4 text-right">
                       <span className="text-sm font-semibold text-red-600">{formatCurrency(returnItem.refund_amount)}</span>
@@ -471,7 +586,7 @@ export default function ReturnsPage() {
         {totalPages > 1 && (
           <div className="px-6 py-4 border-t border-gray-200 flex justify-between items-center">
             <p className="text-sm text-gray-500">
-              Page {currentPage} of {totalPages}
+              Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, filteredReturns.length)} of {filteredReturns.length} returns
             </p>
             <div className="flex gap-2">
               <button
@@ -481,6 +596,9 @@ export default function ReturnsPage() {
               >
                 <FiArrowLeft size={18} />
               </button>
+              <span className="px-4 py-2 text-sm text-gray-600">
+                Page {currentPage} of {totalPages}
+              </span>
               <button
                 onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
                 disabled={currentPage === totalPages}

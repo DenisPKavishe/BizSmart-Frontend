@@ -1,4 +1,4 @@
-// app/(dashboard)/sales/items/page.tsx - COMPLETE SALES ITEMS PAGE
+// app/(dashboard)/sales/items/page.tsx - WITH CASHIER RESTRICTIONS
 
 'use client';
 
@@ -20,6 +20,7 @@ import {
   FiShoppingCart,
 } from 'react-icons/fi';
 import { FaMoneyBillWave, FaBoxOpen, FaChartLine } from 'react-icons/fa';
+import { getPagePermissions, getUserRole } from '@/lib/permissions';
 
 interface SaleItem {
   id: number;
@@ -34,22 +35,8 @@ interface SaleItem {
   discount_amount: string;
 }
 
-interface Sale {
-  id: number;
-  invoice_number: string;
-  customer_name: string;
-  total_amount: string;
-  status: string;
-}
-
-const statusColors: Record<string, string> = {
-  draft: 'bg-gray-100 text-gray-700',
-  completed: 'bg-green-100 text-green-700',
-  cancelled: 'bg-red-100 text-red-700',
-};
-
-// View Sale Item Modal
-function ViewSaleItemModal({ isOpen, onClose, saleItem }: any) {
+// View Sale Item Modal - Hide cost/profit for cashier
+function ViewSaleItemModal({ isOpen, onClose, saleItem, canViewProfit }: any) {
   if (!isOpen || !saleItem) return null;
 
   const profit = parseFloat(saleItem.total_price) - (parseFloat(saleItem.cost_price) * saleItem.quantity);
@@ -66,7 +53,6 @@ function ViewSaleItemModal({ isOpen, onClose, saleItem }: any) {
         </div>
 
         <div className="max-h-[70vh] overflow-y-auto p-6">
-          {/* Header */}
           <div className="mb-6 pb-4 border-b">
             <div className="flex justify-between items-start">
               <div>
@@ -80,7 +66,6 @@ function ViewSaleItemModal({ isOpen, onClose, saleItem }: any) {
             </div>
           </div>
 
-          {/* Sale Information */}
           <div className="mb-6">
             <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
               <FiShoppingCart size={16} /> Sale Information
@@ -97,11 +82,10 @@ function ViewSaleItemModal({ isOpen, onClose, saleItem }: any) {
             </div>
           </div>
 
-          {/* Quantity & Pricing */}
           <div className="mb-6">
             <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
               <FaBoxOpen size={16} /> Quantity & Pricing
-              </h4>
+            </h4>
             <div className="grid grid-cols-2 gap-4 bg-gray-50 p-4 rounded-lg">
               <div>
                 <p className="text-xs text-gray-500">Quantity</p>
@@ -111,45 +95,50 @@ function ViewSaleItemModal({ isOpen, onClose, saleItem }: any) {
                 <p className="text-xs text-gray-500">Unit Price</p>
                 <p className="text-sm text-gray-900">${parseFloat(saleItem.unit_price).toFixed(2)}</p>
               </div>
-              <div>
-                <p className="text-xs text-gray-500">Cost Price</p>
-                <p className="text-sm text-gray-900">${parseFloat(saleItem.cost_price).toFixed(2)}</p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-500">Discount</p>
-                <p className="text-sm text-gray-900">${parseFloat(saleItem.discount_amount).toFixed(2)}</p>
-              </div>
+              {canViewProfit && (
+                <>
+                  <div>
+                    <p className="text-xs text-gray-500">Cost Price</p>
+                    <p className="text-sm text-gray-900">${parseFloat(saleItem.cost_price).toFixed(2)}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500">Discount</p>
+                    <p className="text-sm text-gray-900">${parseFloat(saleItem.discount_amount).toFixed(2)}</p>
+                  </div>
+                </>
+              )}
             </div>
           </div>
 
-          {/* Financial Summary */}
-          <div className="mb-6">
-            <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-              <FaMoneyBillWave size={16} /> Financial Summary
-            </h4>
-            <div className="grid grid-cols-2 gap-4 bg-gray-50 p-4 rounded-lg">
-              <div>
-                <p className="text-xs text-gray-500">Total Price</p>
-                <p className="text-lg font-bold text-blue-600">${parseFloat(saleItem.total_price).toFixed(2)}</p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-500">Total Cost</p>
-                <p className="text-sm text-gray-900">${(parseFloat(saleItem.cost_price) * saleItem.quantity).toFixed(2)}</p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-500">Profit</p>
-                <p className={`text-sm font-semibold ${profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  ${profit.toFixed(2)}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-500">Profit Margin</p>
-                <p className={`text-sm font-semibold ${profitMargin >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  {profitMargin.toFixed(2)}%
-                </p>
+          {canViewProfit && (
+            <div className="mb-6">
+              <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                <FaMoneyBillWave size={16} /> Financial Summary
+              </h4>
+              <div className="grid grid-cols-2 gap-4 bg-gray-50 p-4 rounded-lg">
+                <div>
+                  <p className="text-xs text-gray-500">Total Price</p>
+                  <p className="text-lg font-bold text-blue-600">${parseFloat(saleItem.total_price).toFixed(2)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">Total Cost</p>
+                  <p className="text-sm text-gray-900">${(parseFloat(saleItem.cost_price) * saleItem.quantity).toFixed(2)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">Profit</p>
+                  <p className={`text-sm font-semibold ${profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    ${profit.toFixed(2)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">Profit Margin</p>
+                  <p className={`text-sm font-semibold ${profitMargin >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    {profitMargin.toFixed(2)}%
+                  </p>
+                </div>
               </div>
             </div>
-          </div>
+          )}
         </div>
 
         <div className="sticky bottom-0 bg-white rounded-b-2xl p-4 border-t border-gray-200">
@@ -164,6 +153,9 @@ function ViewSaleItemModal({ isOpen, onClose, saleItem }: any) {
 
 export default function SalesItemsPage() {
   const { user } = useAuthStore();
+  const permissions = getPagePermissions(user);
+  const { isCashier } = getUserRole(user);
+  
   const [saleItems, setSaleItems] = useState<SaleItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -205,7 +197,6 @@ export default function SalesItemsPage() {
     setCurrentPage(1);
   };
 
-  // Filter sale items
   const filteredItems = saleItems.filter(item => {
     const matchesSearch = 
       item.product_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -214,22 +205,27 @@ export default function SalesItemsPage() {
     return matchesSearch;
   });
 
-  // Pagination
   const totalPages = Math.ceil(filteredItems.length / itemsPerPage);
   const paginatedItems = filteredItems.slice(
     (currentPage - 1) * itemsPerPage,
     currentPage * itemsPerPage
   );
 
-  // Statistics
-  const stats = {
-    total: saleItems.length,
-    totalQuantity: saleItems.reduce((sum, item) => sum + item.quantity, 0),
-    totalRevenue: saleItems.reduce((sum, item) => sum + parseFloat(item.total_price), 0),
-    totalCost: saleItems.reduce((sum, item) => sum + (parseFloat(item.cost_price) * item.quantity), 0),
-  };
-  const totalProfit = stats.totalRevenue - stats.totalCost;
-  const profitMargin = (totalProfit / stats.totalRevenue) * 100;
+  // Calculate stats - only for non-cashier
+  let stats = { total: 0, totalQuantity: 0, totalRevenue: 0, totalCost: 0 };
+  let totalProfit = 0;
+  let profitMargin = 0;
+
+  if (permissions.canViewAnalytics) {
+    stats = {
+      total: saleItems.length,
+      totalQuantity: saleItems.reduce((sum, item) => sum + item.quantity, 0),
+      totalRevenue: saleItems.reduce((sum, item) => sum + parseFloat(item.total_price), 0),
+      totalCost: saleItems.reduce((sum, item) => sum + (parseFloat(item.cost_price) * item.quantity), 0),
+    };
+    totalProfit = stats.totalRevenue - stats.totalCost;
+    profitMargin = (totalProfit / stats.totalRevenue) * 100;
+  }
 
   if (isLoading && saleItems.length === 0) {
     return (
@@ -249,11 +245,12 @@ export default function SalesItemsPage() {
 
   return (
     <div className="p-4 md:p-6">
-      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Sales Items</h1>
-          <p className="text-sm text-gray-500 mt-1">Track all sold items</p>
+          <p className="text-sm text-gray-500 mt-1">
+            {isCashier ? 'View sold items' : 'Track all sold items and profitability'}
+          </p>
         </div>
         <button
           onClick={fetchSaleItems}
@@ -264,73 +261,84 @@ export default function SalesItemsPage() {
         </button>
       </div>
 
-      {/* Stats Summary */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-        <div className="bg-white rounded-xl p-4 border border-gray-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs text-gray-500">Total Items Sold</p>
-              <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
+      {/* Stats Summary - HIDDEN FOR CASHIER */}
+      {permissions.canViewAnalytics && (
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+            <div className="bg-white rounded-xl p-4 border border-gray-200">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-gray-500">Total Items Sold</p>
+                  <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
+                </div>
+                <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                  <FiBox className="text-blue-600" size={20} />
+                </div>
+              </div>
             </div>
-            <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-              <FiBox className="text-blue-600" size={20} />
+            <div className="bg-white rounded-xl p-4 border border-gray-200">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-gray-500">Total Quantity</p>
+                  <p className="text-2xl font-bold text-green-600">{stats.totalQuantity}</p>
+                </div>
+                <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
+                  <FaChartLine className="text-green-600" size={20} />
+                </div>
+              </div>
+            </div>
+            <div className="bg-white rounded-xl p-4 border border-gray-200">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-gray-500">Total Revenue</p>
+                  <p className="text-2xl font-bold text-purple-600">
+                    ${stats.totalRevenue.toFixed(0)}
+                  </p>
+                </div>
+                <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+                  <FaMoneyBillWave className="text-purple-600" size={20} />
+                </div>
+              </div>
+            </div>
+            <div className="bg-white rounded-xl p-4 border border-gray-200">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-gray-500">Total Profit</p>
+                  <p className="text-2xl font-bold text-amber-600">
+                    ${totalProfit.toFixed(0)}
+                  </p>
+                </div>
+                <div className="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center">
+                  <FiDollarSign className="text-amber-600" size={20} />
+                </div>
+              </div>
             </div>
           </div>
-        </div>
-        <div className="bg-white rounded-xl p-4 border border-gray-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs text-gray-500">Total Quantity</p>
-              <p className="text-2xl font-bold text-green-600">{stats.totalQuantity}</p>
-            </div>
-            <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
-              <FaChartLine className="text-green-600" size={20} />
-            </div>
-          </div>
-        </div>
-        <div className="bg-white rounded-xl p-4 border border-gray-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs text-gray-500">Total Revenue</p>
-              <p className="text-2xl font-bold text-purple-600">
-                ${stats.totalRevenue.toFixed(0)}
-              </p>
-            </div>
-            <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
-              <FaMoneyBillWave className="text-purple-600" size={20} />
-            </div>
-          </div>
-        </div>
-        <div className="bg-white rounded-xl p-4 border border-gray-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs text-gray-500">Total Profit</p>
-              <p className="text-2xl font-bold text-amber-600">
-                ${totalProfit.toFixed(0)}
-              </p>
-            </div>
-            <div className="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center">
-              <FiDollarSign className="text-amber-600" size={20} />
-            </div>
-          </div>
-        </div>
-      </div>
 
-      {/* Profit Margin Card */}
-      <div className="bg-gradient-to-r from-blue-500 to-blue-600 rounded-xl p-4 mb-6 text-white">
-        <div className="flex justify-between items-center">
-          <div>
-            <p className="text-sm opacity-90">Overall Profit Margin</p>
-            <p className="text-3xl font-bold">{profitMargin.toFixed(1)}%</p>
+          <div className="bg-gradient-to-r from-blue-500 to-blue-600 rounded-xl p-4 mb-6 text-white">
+            <div className="flex justify-between items-center">
+              <div>
+                <p className="text-sm opacity-90">Overall Profit Margin</p>
+                <p className="text-3xl font-bold">{profitMargin.toFixed(1)}%</p>
+              </div>
+              <div className="text-right">
+                <p className="text-sm opacity-90">Total Profit</p>
+                <p className="text-xl font-bold">${totalProfit.toFixed(2)}</p>
+              </div>
+            </div>
           </div>
-          <div className="text-right">
-            <p className="text-sm opacity-90">Total Profit</p>
-            <p className="text-xl font-bold">${totalProfit.toFixed(2)}</p>
-          </div>
-        </div>
-      </div>
+        </>
+      )}
 
-      {/* Search and Filter Bar */}
+      {/* Cashier Simple Info */}
+      {isCashier && (
+        <div className="bg-white rounded-xl p-4 mb-6 border border-gray-200">
+          <p className="text-sm text-gray-500 text-center">
+            Viewing all sales items. Financial details are restricted.
+          </p>
+        </div>
+      )}
+
       <div className="bg-white rounded-xl border border-gray-200 p-4 mb-6">
         <div className="flex flex-col sm:flex-row gap-4">
           <div className="flex-1 relative">
@@ -361,7 +369,6 @@ export default function SalesItemsPage() {
         </div>
       </div>
 
-      {/* Sale Items Table */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
@@ -371,7 +378,9 @@ export default function SalesItemsPage() {
                 <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Quantity</th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Unit Price</th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Total Price</th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Profit</th>
+                {permissions.canViewProfit && (
+                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Profit</th>
+                )}
                 <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Sale ID</th>
                 <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Actions</th>
               </tr>
@@ -379,7 +388,7 @@ export default function SalesItemsPage() {
             <tbody className="divide-y divide-gray-100">
               {paginatedItems.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-12 text-center text-gray-500">
+                  <td colSpan={permissions.canViewProfit ? 7 : 6} className="px-6 py-12 text-center text-gray-500">
                     No sale items found
                   </td>
                 </tr>
@@ -403,11 +412,13 @@ export default function SalesItemsPage() {
                       <td className="px-6 py-4 text-right">
                         <span className="text-sm font-semibold text-blue-600">{formatCurrency(item.total_price)}</span>
                       </td>
-                      <td className="px-6 py-4 text-right">
-                        <span className={`text-sm font-semibold ${profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                          ${profit.toFixed(2)}
-                        </span>
-                      </td>
+                      {permissions.canViewProfit && (
+                        <td className="px-6 py-4 text-right">
+                          <span className={`text-sm font-semibold ${profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                            ${profit.toFixed(2)}
+                          </span>
+                        </td>
+                      )}
                       <td className="px-6 py-4 text-center">
                         <span className="text-sm text-gray-600">#{item.sale}</span>
                       </td>
@@ -428,7 +439,6 @@ export default function SalesItemsPage() {
           </table>
         </div>
 
-        {/* Pagination */}
         {totalPages > 1 && (
           <div className="px-6 py-4 border-t border-gray-200 flex justify-between items-center">
             <p className="text-sm text-gray-500">
@@ -454,7 +464,6 @@ export default function SalesItemsPage() {
         )}
       </div>
 
-      {/* View Sale Item Modal */}
       <ViewSaleItemModal
         isOpen={showViewModal}
         onClose={() => {
@@ -462,6 +471,7 @@ export default function SalesItemsPage() {
           setSelectedItem(null);
         }}
         saleItem={selectedItem}
+        canViewProfit={permissions.canViewProfit}
       />
     </div>
   );

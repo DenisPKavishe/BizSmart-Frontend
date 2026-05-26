@@ -51,6 +51,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
+      <head>
+        <link rel="icon" href="/images/BizSmartLogo.png" type="image/png" />
+      </head>
       <body className={inter.className}>
         {children}
         <Toaster position="top-right" />

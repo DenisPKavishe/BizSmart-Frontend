@@ -1,4 +1,5 @@
-// app/(dashboard)/sales/customers/page.tsx
+// app/(dashboard)/sales/customers/page.tsx - WITH CASHIER RESTRICTIONS
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -17,6 +18,7 @@ import {
   FiX,
   FiRefreshCw,
 } from 'react-icons/fi';
+import { getPagePermissions, getUserRole } from '@/lib/permissions';
 
 interface Customer {
   id: number;
@@ -31,6 +33,9 @@ interface Customer {
 
 export default function CustomersPage() {
   const { user } = useAuthStore();
+  const permissions = getPagePermissions(user);
+  const { isCashier } = getUserRole(user);
+  
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -47,7 +52,7 @@ export default function CustomersPage() {
     address: '',
   });
 
-  // Stats state
+  // Stats state - only for managers
   const [totalCustomers, setTotalCustomers] = useState(0);
   const [totalSpent, setTotalSpent] = useState(0);
   const [totalVisits, setTotalVisits] = useState(0);
@@ -64,21 +69,25 @@ export default function CustomersPage() {
       const customersData = response.data.results || response.data;
       setCustomers(customersData);
       
-      // Calculate stats properly
-      let spentSum = 0;
-      let visitsSum = 0;
-      
-      for (let i = 0; i < customersData.length; i++) {
-        const spent = parseFloat(customersData[i].total_spent) || 0;
-        const visits = parseInt(customersData[i].total_visits) || 0;
-        spentSum = spentSum + spent;
-        visitsSum = visitsSum + visits;
+      // Calculate stats only for managers
+      if (permissions.canViewAnalytics) {
+        let spentSum = 0;
+        let visitsSum = 0;
+        
+        for (let i = 0; i < customersData.length; i++) {
+          const spent = parseFloat(customersData[i].total_spent) || 0;
+          const visits = parseInt(customersData[i].total_visits) || 0;
+          spentSum = spentSum + spent;
+          visitsSum = visitsSum + visits;
+        }
+        
+        setTotalCustomers(customersData.length);
+        setTotalSpent(spentSum);
+        setTotalVisits(visitsSum);
+        setAverageSpent(customersData.length > 0 ? spentSum / customersData.length : 0);
+      } else {
+        setTotalCustomers(customersData.length);
       }
-      
-      setTotalCustomers(customersData.length);
-      setTotalSpent(spentSum);
-      setTotalVisits(visitsSum);
-      setAverageSpent(customersData.length > 0 ? spentSum / customersData.length : 0);
       
     } catch (error) {
       console.error('Failed to fetch customers:', error);
@@ -119,6 +128,11 @@ export default function CustomersPage() {
 
   const handleDelete = async () => {
     if (!customerToDelete) return;
+    
+    if (!permissions.canDelete) {
+      toast.error('Only managers can delete customers');
+      return;
+    }
     
     setIsDeleting(true);
     try {
@@ -173,7 +187,6 @@ export default function CustomersPage() {
     return new Date(dateString).toLocaleDateString();
   };
 
-  // Filter customers
   const filteredCustomers = customers.filter(customer =>
     customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     customer.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -198,7 +211,6 @@ export default function CustomersPage() {
 
   return (
     <div className="p-4 md:p-6">
-      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Customers</h1>
@@ -213,7 +225,6 @@ export default function CustomersPage() {
         </button>
       </div>
 
-      {/* Search Bar */}
       <div className="bg-white rounded-xl border border-gray-200 p-4 mb-6">
         <div className="flex flex-col sm:flex-row gap-4">
           <div className="flex-1 relative">
@@ -235,24 +246,28 @@ export default function CustomersPage() {
         </div>
       </div>
 
-      {/* Stats Summary - Fixed */}
+      {/* Stats Summary - Simplified for Cashier */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         <div className="bg-white rounded-xl p-4 border border-gray-200">
           <p className="text-xs text-gray-500">Total Customers</p>
           <p className="text-2xl font-bold text-gray-900">{totalCustomers}</p>
         </div>
-        <div className="bg-white rounded-xl p-4 border border-gray-200">
-          <p className="text-xs text-gray-500">Total Spent</p>
-          <p className="text-2xl font-bold text-green-600">{formatCurrency(totalSpent)}</p>
-        </div>
-        <div className="bg-white rounded-xl p-4 border border-gray-200">
-          <p className="text-xs text-gray-500">Total Visits</p>
-          <p className="text-2xl font-bold text-brand-600">{totalVisits}</p>
-        </div>
-        <div className="bg-white rounded-xl p-4 border border-gray-200">
-          <p className="text-xs text-gray-500">Average Spent</p>
-          <p className="text-2xl font-bold text-purple-600">{formatCurrency(averageSpent)}</p>
-        </div>
+        {permissions.canViewAnalytics && (
+          <>
+            <div className="bg-white rounded-xl p-4 border border-gray-200">
+              <p className="text-xs text-gray-500">Total Spent</p>
+              <p className="text-2xl font-bold text-green-600">{formatCurrency(totalSpent)}</p>
+            </div>
+            <div className="bg-white rounded-xl p-4 border border-gray-200">
+              <p className="text-xs text-gray-500">Total Visits</p>
+              <p className="text-2xl font-bold text-brand-600">{totalVisits}</p>
+            </div>
+            <div className="bg-white rounded-xl p-4 border border-gray-200">
+              <p className="text-xs text-gray-500">Average Spent</p>
+              <p className="text-2xl font-bold text-purple-600">{formatCurrency(averageSpent)}</p>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Customers Grid */}
@@ -270,7 +285,6 @@ export default function CustomersPage() {
           </div>
         ) : (
           filteredCustomers.map((customer) => {
-            // Ensure numeric values
             const totalSpentNum = parseFloat(String(customer.total_spent)) || 0;
             const totalVisitsNum = parseInt(String(customer.total_visits)) || 0;
             
@@ -314,19 +328,27 @@ export default function CustomersPage() {
                     >
                       <FiEdit2 size={16} />
                     </button>
-                    <button
-                      onClick={() => openDeleteModal(customer)}
-                      className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition"
-                      title="Delete"
-                    >
-                      <FiTrash2 size={16} />
-                    </button>
+                    {permissions.canDelete && (
+                      <button
+                        onClick={() => openDeleteModal(customer)}
+                        className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition"
+                        title="Delete"
+                      >
+                        <FiTrash2 size={16} />
+                      </button>
+                    )}
                   </div>
                 </div>
                 <div className="mt-3 pt-3 border-t border-gray-100 flex justify-between text-xs">
-                  <span className="text-gray-500">Total spent: <span className="font-semibold text-green-600">{formatCurrency(totalSpentNum)}</span></span>
-                  <span className="text-gray-500">Visits: <span className="font-semibold text-brand-600">{totalVisitsNum}</span></span>
-                  <span className="text-gray-500">Since: {formatDate(customer.created_at)}</span>
+                  {permissions.canViewAnalytics ? (
+                    <>
+                      <span className="text-gray-500">Total spent: <span className="font-semibold text-green-600">{formatCurrency(totalSpentNum)}</span></span>
+                      <span className="text-gray-500">Visits: <span className="font-semibold text-brand-600">{totalVisitsNum}</span></span>
+                      <span className="text-gray-500">Since: {formatDate(customer.created_at)}</span>
+                    </>
+                  ) : (
+                    <span className="text-gray-500">Customer since: {formatDate(customer.created_at)}</span>
+                  )}
                 </div>
               </div>
             );
@@ -334,7 +356,7 @@ export default function CustomersPage() {
         )}
       </div>
 
-      {/* Customer Modal (Create/Edit) */}
+      {/* Customer Modal - Same for all roles */}
       {showModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl max-w-md w-full">
@@ -429,8 +451,8 @@ export default function CustomersPage() {
         </div>
       )}
 
-      {/* Delete Confirmation Modal */}
-      {showDeleteModal && customerToDelete && (
+      {/* Delete Confirmation Modal - Only for managers */}
+      {showDeleteModal && customerToDelete && permissions.canDelete && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl max-w-md w-full">
             <div className="p-6">

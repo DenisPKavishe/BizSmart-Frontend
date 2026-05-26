@@ -1,4 +1,5 @@
-// app/(dashboard)/sales/pos/page.tsx
+// app/(dashboard)/sales/pos/page.tsx - CORRECTED VERSION
+
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
@@ -61,7 +62,7 @@ export default function POSPage() {
   const [customerPhone, setCustomerPhone] = useState('');
   const [selectedCustomerId, setSelectedCustomerId] = useState<number | null>(null);
   const [paymentMethod, setPaymentMethod] = useState('cash');
-  const [amountPaid, setAmountPaid] = useState(0);
+  const [amountPaid, setAmountPaid] = useState<number>(0); // ✅ Always store as number
   const [isLoading, setIsLoading] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
   const [showReceipt, setShowReceipt] = useState(false);
@@ -187,21 +188,24 @@ export default function POSPage() {
     setCustomerPhone('');
   };
 
-  // Calculate totals
+  // Calculate totals - ✅ Now properly typed
   const subtotal = cart.reduce((sum, item) => sum + item.total, 0);
   const total = subtotal;
   const itemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
   const calculatedChange = returnChange && amountPaid > total ? amountPaid - total : 0;
 
-  // Process sale
+  // ✅ FIXED: Process sale with proper validation
   const processSale = async () => {
     if (cart.length === 0) {
       toast.error('Cart is empty');
       return;
     }
 
-    if (amountPaid < total && paymentMethod !== 'credit') {
-      toast.error(`Amount paid (TZS ${amountPaid.toLocaleString()}) is less than total (TZS ${total.toLocaleString()})`);
+    // ✅ FIXED: Ensure amountPaid is a number for comparison
+    const amountPaidValue = Number(amountPaid) || 0;
+    
+    if (amountPaidValue < total && paymentMethod !== 'credit') {
+      toast.error(`Amount paid (TZS ${amountPaidValue.toLocaleString()}) is less than total (TZS ${total.toLocaleString()})`);
       return;
     }
 
@@ -216,7 +220,7 @@ export default function POSPage() {
           quantity: item.quantity
         })),
         payment_method: paymentMethod,
-        amount_paid: amountPaid,
+        amount_paid: amountPaidValue,
         discount_amount: 0,
         discount_percentage: 0,
         notes: returnChange ? `Change returned: TZS ${calculatedChange}` : 'No change returned'
@@ -229,7 +233,7 @@ export default function POSPage() {
       const response = await salesApi.processSale(saleData);
       setLastSale({
         ...response.data,
-        actualAmountPaid: amountPaid,
+        actualAmountPaid: amountPaidValue,
         changeReturned: calculatedChange,
         returnedChange: returnChange
       });
@@ -237,7 +241,7 @@ export default function POSPage() {
       toast.success(`Sale completed! Invoice: ${response.data.sale.invoice_number}`);
       
       setCart([]);
-      setAmountPaid(0);
+      setAmountPaid(0); // ✅ Reset to 0, not empty string
       setReturnChange(true);
       fetchData();
       setShowReceipt(true);
@@ -254,16 +258,29 @@ export default function POSPage() {
     if (cart.length === 0) return;
     if (confirm('Clear entire cart?')) {
       setCart([]);
+      setAmountPaid(0); // ✅ Reset amount paid when cart is cleared
       toast.success('Cart cleared');
     }
   };
 
+  // ✅ FIXED: Quick add amount - ensure proper number addition
   const quickAddAmount = (amount: number) => {
-    setAmountPaid(amountPaid + amount);
+    setAmountPaid(prev => prev + amount);
   };
 
+  // ✅ FIXED: Set exact amount - ensure proper number
   const setExactAmount = () => {
     setAmountPaid(total);
+  };
+
+  // ✅ FIXED: Handle amount paid input change
+  const handleAmountPaidChange = (value: string) => {
+    const numValue = parseFloat(value);
+    if (isNaN(numValue)) {
+      setAmountPaid(0);
+    } else {
+      setAmountPaid(numValue);
+    }
   };
 
   const printReceipt = () => {
@@ -663,11 +680,12 @@ export default function POSPage() {
                       </button>
                     ))}
                   </div>
+                  {/* ✅ FIXED: Proper number input handling */}
                   <input
                     type="number"
                     placeholder="Enter amount"
                     value={amountPaid || ''}
-                    onChange={(e) => setAmountPaid(parseFloat(e.target.value) || 0)}
+                    onChange={(e) => handleAmountPaidChange(e.target.value)}
                     className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 text-lg"
                   />
                   
@@ -719,7 +737,7 @@ export default function POSPage() {
 
                 <button
                   onClick={processSale}
-                  disabled={amountPaid < total && paymentMethod !== 'credit' || isProcessing}
+                  disabled={(amountPaid < total && paymentMethod !== 'credit') || isProcessing}
                   className="w-full bg-brand-500 text-white py-3 rounded-lg font-semibold hover:bg-brand-600 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
                   {isProcessing ? (
