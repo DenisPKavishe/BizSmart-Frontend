@@ -183,7 +183,7 @@ How can I help you today?`,
 
   return (
     <>
-      
+      {/* Chat Button */}
       <motion.button
         initial={{ scale: 0, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
@@ -200,7 +200,7 @@ How can I help you today?`,
         </svg>
       </motion.button>
 
-      
+      {/* Chat Modal */}
       <AnimatePresence>
         {isOpen && (
           <motion.div
@@ -217,7 +217,7 @@ How can I help you today?`,
               transition={{ type: "spring", damping: 25, stiffness: 300 }}
               className="bg-white rounded-3xl shadow-2xl w-[95vw] max-w-[900px] h-[85vh] max-h-[800px] flex flex-col overflow-hidden"
             >
-              
+              {/* Header */}
               <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center shadow-md">
@@ -254,7 +254,7 @@ How can I help you today?`,
                 </div>
               </div>
 
-              
+              {/* Messages */}
               <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6 bg-gray-50/30">
                 {messages.map((message, index) => (
                   <motion.div
@@ -264,6 +264,7 @@ How can I help you today?`,
                     transition={{ delay: index * 0.05 }}
                     className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
                   >
+                    {/* Assistant Icon - Left side for assistant messages */}
                     {message.role === 'assistant' && (
                       <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-sm flex-shrink-0 mr-3">
                         <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -271,6 +272,8 @@ How can I help you today?`,
                         </svg>
                       </div>
                     )}
+                    
+                    {/* Message Bubble */}
                     <div className={`max-w-[70%] ${message.role === 'user' ? 'order-2' : 'order-1'}`}>
                       <div className={`rounded-2xl px-4 py-3 ${
                         message.role === 'user' 
@@ -283,9 +286,11 @@ How can I help you today?`,
                         </p>
                       </div>
                     </div>
+                    
+                    {/* User Icon - Right side for user messages */}
                     {message.role === 'user' && (
-                      <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center shadow-sm flex-shrink-0 ml-3">
-                        <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-gray-400 to-gray-500 flex items-center justify-center shadow-sm flex-shrink-0 ml-3">
+                        <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                         </svg>
                       </div>
@@ -293,7 +298,7 @@ How can I help you today?`,
                   </motion.div>
                 ))}
                 
-                
+                {/* Typing Indicator */}
                 {isTyping && (
                   <motion.div
                     initial={{ opacity: 0, y: 10 }}
@@ -318,7 +323,7 @@ How can I help you today?`,
                 <div ref={messagesEndRef} />
               </div>
 
-              
+              {/* Input Area */}
               <div className="border-t border-gray-100 p-5 bg-white">
                 <div className="flex gap-3">
                   <div className="relative flex-1">
@@ -344,7 +349,6 @@ How can I help you today?`,
                     </svg>
                   </button>
                 </div>
-                
               </div>
             </motion.div>
           </motion.div>
