@@ -1,4 +1,4 @@
-// app/(dashboard)/bi/financial/page.tsx - COMPLETE WORKING VERSION
+// app/(dashboard)/bi/financial/page.tsx - COMPLETE WORKING VERSION WITH BUDGET INTEGRATION
 
 'use client';
 
@@ -31,8 +31,9 @@ import {
   FiUser,
   FiShoppingBag,
   FiAward,
+  FiCalendar,
 } from 'react-icons/fi';
-import { FaHandHoldingUsd, FaMoneyBillWave, FaChartLine, FaUserGraduate } from 'react-icons/fa';
+import { FaHandHoldingUsd, FaMoneyBillWave, FaChartLine, FaUserGraduate, FaWallet } from 'react-icons/fa';
 import {
   LineChart,
   Line,
@@ -51,6 +52,47 @@ import {
   ResponsiveContainer,
   ComposedChart,
 } from 'recharts';
+
+// ==================== INTERFACES ====================
+interface Budget {
+  id: number;
+  name: string;
+  period: 'monthly' | 'quarterly' | 'yearly';
+  year: number;
+  month?: number;
+  quarter?: number;
+  status: string;
+  total_planned_income: number;
+  total_actual_income: number;
+  total_planned_expenses: number;
+  total_actual_expenses: number;
+  planned_profit: number;
+  actual_profit: number;
+  notes?: string;
+}
+
+interface BudgetItem {
+  id: number;
+  category: string;
+  category_name: string;
+  type: string;
+  planned_amount: number;
+  actual_amount: number;
+  variance: number;
+  variance_percentage: number;
+  notes?: string;
+}
+
+interface BudgetAlert {
+  category: string;
+  category_name: string;
+  type: string;
+  planned_amount: number;
+  actual_amount: number;
+  percentage: number;
+  severity: 'warning' | 'critical';
+  message: string;
+}
 
 // ==================== HELPER FUNCTIONS ====================
 
@@ -79,6 +121,19 @@ const formatPercent = (value: any): string => {
   return `${num.toFixed(1)}%`;
 };
 
+const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const fullMonthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+const getPeriodDisplay = (budget: Budget): string => {
+  if (budget.period === 'monthly' && budget.month) {
+    return `${fullMonthNames[budget.month - 1]} ${budget.year}`;
+  }
+  if (budget.period === 'quarterly' && budget.quarter) {
+    return `Q${budget.quarter} ${budget.year}`;
+  }
+  return `${budget.year}`;
+};
+
 // ==================== CUSTOM TOOLTIP COMPONENT ====================
 
 const CustomTooltip = ({ active, payload, label }: any) => {
@@ -104,7 +159,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 
 // ==================== COMPONENTS ====================
 
-function FinancialMetricCard({ title, value, change, icon: Icon, isNegative, subtext, onClick }: any) {
+function FinancialMetricCard({ title, value, change, icon: Icon, isNegative, subtext, onClick, budgetStatus }: any) {
   const isPositive = toNumber(change) > 0;
   const isNegativeChange = toNumber(change) < 0;
   
@@ -118,6 +173,13 @@ function FinancialMetricCard({ title, value, change, icon: Icon, isNegative, sub
             <div className={`flex items-center gap-1 mt-1 text-xs ${isPositive ? 'text-green-600' : isNegativeChange ? 'text-red-600' : 'text-gray-500'}`}>
               {isPositive ? <FiArrowUp size={12} /> : isNegativeChange ? <FiArrowDown size={12} /> : null}
               <span>{Math.abs(toNumber(change))}% from last period</span>
+            </div>
+          )}
+          {budgetStatus && (
+            <div className="mt-1">
+              <span className={`text-xs px-1.5 py-0.5 rounded-full ${budgetStatus.color}`}>
+                {budgetStatus.text}
+              </span>
             </div>
           )}
           {subtext && <p className="text-xs text-gray-400 mt-1">{subtext}</p>}
@@ -151,17 +213,59 @@ function Section({ title, icon: Icon, children, action }: any) {
   );
 }
 
+// Budget Progress Bar Component
+function BudgetProgressBar({ planned, actual, title, type }: any) {
+  const percentage = planned > 0 ? Math.min((actual / planned) * 100, 100) : 0;
+  const isOverBudget = actual > planned;
+  const color = type === 'income' 
+    ? (isOverBudget ? 'text-green-600' : 'text-yellow-600')
+    : (isOverBudget ? 'text-red-600' : 'text-green-600');
+  
+  return (
+    <div className="mb-3">
+      <div className="flex justify-between text-sm mb-1">
+        <span className="font-medium text-gray-700">{title}</span>
+        <div className="text-right">
+          <span className="text-xs text-gray-500">Actual: {formatCurrency(actual)}</span>
+          <span className="text-xs text-gray-400 mx-1">/</span>
+          <span className="text-xs text-gray-500">Target: {formatCurrency(planned)}</span>
+        </div>
+      </div>
+      <div className="w-full bg-gray-200 rounded-full h-2">
+        <div 
+          className={`h-2 rounded-full transition-all ${type === 'income' ? 'bg-green-500' : 'bg-red-500'}`}
+          style={{ width: `${percentage}%` }}
+        />
+      </div>
+      <div className="flex justify-between mt-1">
+        <span className="text-xs text-gray-400">{percentage.toFixed(0)}% of target</span>
+        <span className={`text-xs font-medium ${color}`}>
+          {isOverBudget ? (type === 'income' ? 'Exceeding target! 🎉' : 'Over budget ⚠️') : 'On track ✓'}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 // ==================== MAIN COMPONENT ====================
 
 export default function FinancialDashboard() {
   const { user } = useAuthStore();
   const [isLoading, setIsLoading] = useState(true);
   const [selectedPeriod, setSelectedPeriod] = useState<'month' | 'quarter' | 'year'>('month');
+  const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
+  const [currentMonth, setCurrentMonth] = useState(new Date().getMonth() + 1);
   
   // Main Financial Data
   const [pnlData, setPnlData] = useState<any>(null);
   const [cashFlowData, setCashFlowData] = useState<any>(null);
   const [trendData, setTrendData] = useState<any>(null);
+  
+  // Budget Data
+  const [activeBudget, setActiveBudget] = useState<Budget | null>(null);
+  const [budgetItems, setBudgetItems] = useState<BudgetItem[]>([]);
+  const [budgetAlerts, setBudgetAlerts] = useState<BudgetAlert[]>([]);
+  const [hasBudget, setHasBudget] = useState(false);
   
   // Money Flow Data
   const [transactions, setTransactions] = useState<any[]>([]);
@@ -199,11 +303,81 @@ export default function FinancialDashboard() {
 
   useEffect(() => {
     fetchAllFinancialData();
-  }, [selectedPeriod]);
+  }, [selectedPeriod, currentYear, currentMonth]);
+
+  const fetchBudgetForPeriod = async () => {
+    try {
+      let period = selectedPeriod;
+      let budgetParams: any = { year: currentYear, status: 'active' };
+      
+      if (selectedPeriod === 'month') {
+        budgetParams.period = 'monthly';
+        const response = await financialsApi.getBudgets(budgetParams);
+        const budgets = response.data.results || response.data || [];
+        const monthBudget = budgets.find((b: any) => b.month === currentMonth);
+        if (monthBudget) {
+          setHasBudget(true);
+          const vsActual = await financialsApi.getBudgetVsActual(monthBudget.id);
+          setActiveBudget(vsActual.data.budget);
+          setBudgetItems(vsActual.data.budget.items || []);
+          setBudgetAlerts(vsActual.data.alerts || []);
+        } else {
+          setHasBudget(false);
+          setActiveBudget(null);
+          setBudgetItems([]);
+          setBudgetAlerts([]);
+        }
+      } else if (selectedPeriod === 'quarter') {
+        budgetParams.period = 'quarterly';
+        const quarter = Math.ceil(currentMonth / 3);
+        budgetParams.quarter = quarter;
+        const response = await financialsApi.getBudgets(budgetParams);
+        const budgets = response.data.results || response.data || [];
+        const quarterBudget = budgets.find((b: any) => b.quarter === quarter);
+        if (quarterBudget) {
+          setHasBudget(true);
+          const vsActual = await financialsApi.getBudgetVsActual(quarterBudget.id);
+          setActiveBudget(vsActual.data.budget);
+          setBudgetItems(vsActual.data.budget.items || []);
+          setBudgetAlerts(vsActual.data.alerts || []);
+        } else {
+          setHasBudget(false);
+          setActiveBudget(null);
+          setBudgetItems([]);
+          setBudgetAlerts([]);
+        }
+      } else {
+        budgetParams.period = 'yearly';
+        const response = await financialsApi.getBudgets(budgetParams);
+        const budgets = response.data.results || response.data || [];
+        const yearBudget = budgets[0];
+        if (yearBudget) {
+          setHasBudget(true);
+          const vsActual = await financialsApi.getBudgetVsActual(yearBudget.id);
+          setActiveBudget(vsActual.data.budget);
+          setBudgetItems(vsActual.data.budget.items || []);
+          setBudgetAlerts(vsActual.data.alerts || []);
+        } else {
+          setHasBudget(false);
+          setActiveBudget(null);
+          setBudgetItems([]);
+          setBudgetAlerts([]);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch budget:', error);
+      setHasBudget(false);
+      setActiveBudget(null);
+      setBudgetItems([]);
+      setBudgetAlerts([]);
+    }
+  };
 
   const fetchAllFinancialData = async () => {
     setIsLoading(true);
     try {
+      await fetchBudgetForPeriod();
+      
       const [
         pnlRes,
         cashFlowRes,
@@ -281,10 +455,10 @@ export default function FinancialDashboard() {
       setPettyCashByCategory(Object.entries(pettyCategories).map(([name, value]) => ({ name, value })));
       
       let payrollList = payrollRes.data?.results || payrollRes.data || [];
-      const currentYear = new Date().getFullYear();
-      const currentMonth = new Date().getMonth() + 1;
+      const currentYearDate = new Date().getFullYear();
+      const currentMonthDate = new Date().getMonth() + 1;
       const monthlyPayroll = payrollList
-        .filter((p: any) => p.month === currentMonth && p.year === currentYear && p.status === 'paid')
+        .filter((p: any) => p.month === currentMonthDate && p.year === currentYearDate && p.status === 'paid')
         .reduce((sum: number, p: any) => sum + toNumber(p.total_net_salary), 0);
       setPayrollTotal(monthlyPayroll);
       setPayrollHistory(payrollList.slice(0, 6));
@@ -323,8 +497,20 @@ export default function FinancialDashboard() {
     profit: toNumber(item.revenue) - (toNumber(pnlData?.expenses?.total) * 0.2 || 0),
   }));
 
-  const expenseColors = ['#EF4444', '#F59E0B', '#EC4899', '#8B5CF6'];
   const profitMarginValue = totalIncome > 0 ? (netCashFlow / totalIncome) * 100 : 0;
+
+  // Budget status for card
+  const getBudgetStatus = () => {
+    if (!activeBudget) return null;
+    const profitVariance = activeBudget.actual_profit - activeBudget.planned_profit;
+    if (profitVariance >= 0) {
+      return { text: 'Exceeding Profit Target 🎉', color: 'bg-green-100 text-green-700' };
+    } else if (profitVariance > -activeBudget.planned_profit * 0.1) {
+      return { text: 'Slightly Below Target', color: 'bg-yellow-100 text-yellow-700' };
+    } else {
+      return { text: 'Below Target - Review', color: 'bg-red-100 text-red-700' };
+    }
+  };
 
   if (isLoading) {
     return (
@@ -381,6 +567,25 @@ export default function FinancialDashboard() {
         </div>
       </div>
 
+      {/* Budget Alert Banner */}
+      {budgetAlerts.length > 0 && (
+        <div className="mb-6 space-y-2">
+          {budgetAlerts.slice(0, 3).map((alert, index) => (
+            <div 
+              key={index} 
+              className={`p-3 rounded-xl flex items-center gap-3 ${
+                alert.severity === 'critical' ? 'bg-red-50 border border-red-200' : 'bg-yellow-50 border border-yellow-200'
+              }`}
+            >
+              <FiAlertCircle className={`flex-shrink-0 ${alert.severity === 'critical' ? 'text-red-500' : 'text-yellow-500'}`} size={18} />
+              <p className={`text-sm ${alert.severity === 'critical' ? 'text-red-800' : 'text-yellow-800'}`}>
+                {alert.message}
+              </p>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Main Money Flow Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-6">
         <FinancialMetricCard
@@ -390,6 +595,10 @@ export default function FinancialDashboard() {
           icon={FaMoneyBillWave}
           isNegative={false}
           subtext={`From ${transactions.filter(t => t.type === 'income').length} transactions`}
+          budgetStatus={hasBudget && activeBudget ? {
+            text: `Target: ${formatCurrency(activeBudget.total_planned_income)}`,
+            color: 'bg-gray-100 text-gray-600'
+          } : undefined}
         />
         <FinancialMetricCard
           title="Total Expenses"
@@ -398,6 +607,10 @@ export default function FinancialDashboard() {
           icon={FiTrendingDown}
           isNegative={true}
           subtext={`${transactions.filter(t => t.type === 'expense').length} expense transactions`}
+          budgetStatus={hasBudget && activeBudget ? {
+            text: `Budget: ${formatCurrency(activeBudget.total_planned_expenses)}`,
+            color: 'bg-gray-100 text-gray-600'
+          } : undefined}
         />
         <FinancialMetricCard
           title="Net Cash Flow"
@@ -408,13 +621,80 @@ export default function FinancialDashboard() {
           subtext={netCashFlow >= 0 ? 'Positive cash flow' : 'Negative cash flow - Review expenses'}
         />
         <FinancialMetricCard
-          title="Profit Margin"
-          value={formatPercent(profitMarginValue)}
+          title="Profit vs Budget"
+          value={hasBudget && activeBudget ? formatCurrency(activeBudget.actual_profit) : formatCurrency(netCashFlow)}
           icon={FiTarget}
-          isNegative={profitMarginValue < 0}
-          subtext={profitMarginValue > 20 ? 'Healthy margin' : profitMarginValue > 10 ? 'Moderate margin' : 'Margin needs improvement'}
+          isNegative={activeBudget ? activeBudget.actual_profit < 0 : netCashFlow < 0}
+          subtext={hasBudget && activeBudget ? `Target: ${formatCurrency(activeBudget.planned_profit)}` : 'No active budget'}
+          budgetStatus={getBudgetStatus()}
         />
       </div>
+
+      {/* Budget Progress Section - Only show if budget exists */}
+      {hasBudget && activeBudget && (
+        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl p-5 mb-6 border border-blue-100">
+          <div className="flex items-center gap-2 mb-4">
+            <FaWallet className="text-blue-600" size={20} />
+            <h2 className="font-semibold text-gray-900">Budget Performance: {activeBudget.name}</h2>
+            <span className="text-xs text-gray-500 ml-2">{getPeriodDisplay(activeBudget)}</span>
+          </div>
+          
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div>
+              <h3 className="text-sm font-medium text-gray-700 mb-3">Income vs Budget</h3>
+              <BudgetProgressBar 
+                planned={activeBudget.total_planned_income}
+                actual={activeBudget.total_actual_income}
+                title="Total Income"
+                type="income"
+              />
+              {budgetItems.filter(i => i.type === 'income').slice(0, 3).map((item, idx) => (
+                <BudgetProgressBar 
+                  key={idx}
+                  planned={item.planned_amount}
+                  actual={item.actual_amount}
+                  title={item.category_name}
+                  type="income"
+                />
+              ))}
+            </div>
+            <div>
+              <h3 className="text-sm font-medium text-gray-700 mb-3">Expenses vs Budget</h3>
+              <BudgetProgressBar 
+                planned={activeBudget.total_planned_expenses}
+                actual={activeBudget.total_actual_expenses}
+                title="Total Expenses"
+                type="expense"
+              />
+              {budgetItems.filter(i => i.type === 'expense').slice(0, 3).map((item, idx) => (
+                <BudgetProgressBar 
+                  key={idx}
+                  planned={item.planned_amount}
+                  actual={item.actual_amount}
+                  title={item.category_name}
+                  type="expense"
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* No Budget Banner */}
+      {!hasBudget && (
+        <div className="bg-gray-50 rounded-2xl p-6 mb-6 text-center border border-gray-200">
+          <FiTarget className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+          <h3 className="text-lg font-medium text-gray-900 mb-2">No Active Budget</h3>
+          <p className="text-gray-500 mb-4">Create a budget to track your financial performance against targets</p>
+          <Link 
+            href="/financials/budgets/create" 
+            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+          >
+            <FiTarget size={16} />
+            Create Budget
+          </Link>
+        </div>
+      )}
 
       {/* Customer Money & Revenue Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-6">
@@ -771,6 +1051,7 @@ export default function FinancialDashboard() {
           <div className="flex gap-4">
             <span className="flex items-center gap-1">Green = Positive / Income</span>
             <span className="flex items-center gap-1">Red = Negative / Expenses</span>
+            {hasBudget && <span className="flex items-center gap-1 text-blue-600">📊 Budget tracking active</span>}
             <Link href="/reports" className="hover:text-blue-600">Download Financial Reports →</Link>
           </div>
         </div>

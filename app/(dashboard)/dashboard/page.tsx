@@ -1,10 +1,10 @@
-// app/(dashboard)/dashboard/page.tsx - TODAY'S CASHFLOW ONLY
+// app/(dashboard)/dashboard/page.tsx - COMPLETE DAILY DASHBOARD
 
 'use client';
 
 import { useEffect, useState } from 'react';
 import { useAuthStore } from '@/store/authStore';
-import { salesApi, financialsApi } from '@/services/api';
+import { salesApi, financialsApi, hrApi } from '@/services/api';
 import toast from 'react-hot-toast';
 import {
   FiDollarSign,
@@ -21,6 +21,9 @@ import {
   FiArrowDown,
   FiCreditCard,
   FiSmartphone,
+  FiFileText,
+  FiHome,
+  FiBriefcase,
 } from 'react-icons/fi';
 import Link from 'next/link';
 
@@ -49,6 +52,15 @@ interface RecentTransaction {
   type: 'income' | 'expense';
   payment_method: string;
   time: string;
+  source: string;
+}
+
+interface ExpenseBreakdown {
+  pettyCash: number;
+  invoices: number;
+  payroll: number;
+  other: number;
+  total: number;
 }
 
 // Helper function to safely convert to number
@@ -102,6 +114,13 @@ export default function DashboardPage() {
     card: 0,
     total: 0,
   });
+  const [expenseBreakdown, setExpenseBreakdown] = useState<ExpenseBreakdown>({
+    pettyCash: 0,
+    invoices: 0,
+    payroll: 0,
+    other: 0,
+    total: 0,
+  });
   const [recentTransactions, setRecentTransactions] = useState<RecentTransaction[]>([]);
   const [error, setError] = useState<string | null>(null);
 
@@ -119,8 +138,8 @@ export default function DashboardPage() {
       const startDate = today.toISOString().split('T')[0];
       const endDate = startDate;
       
-      // Fetch today's sales and transactions
-      const [salesRes, transactionsRes] = await Promise.all([
+      // Fetch all data in parallel
+      const [salesRes, transactionsRes, pettyCashRes, payrollRes] = await Promise.all([
         salesApi.getSales({ 
           start_date: startDate, 
           end_date: endDate,
@@ -131,6 +150,12 @@ export default function DashboardPage() {
           end_date: endDate,
           page_size: 100 
         }).catch(() => ({ data: null })),
+        financialsApi.getPettyCash({ 
+          start_date: startDate, 
+          end_date: endDate,
+          page_size: 100 
+        }).catch(() => ({ data: null })),
+        hrApi.getPayrolls().catch(() => ({ data: null })),
       ]);
 
       let todayRevenue = 0;
@@ -138,6 +163,10 @@ export default function DashboardPage() {
       let cashTotal = 0;
       let mpesaTotal = 0;
       let cardTotal = 0;
+      let pettyCashTotal = 0;
+      let invoiceExpensesTotal = 0;
+      let payrollTotal = 0;
+      let otherExpensesTotal = 0;
       const transactionsList: RecentTransaction[] = [];
 
       // Process sales data
@@ -169,41 +198,122 @@ export default function DashboardPage() {
               type: 'income',
               payment_method: sale.payment_method || 'cash',
               time: sale.sale_date,
+              source: 'sale',
             });
           }
         });
       }
 
-      // Process expenses (if any)
-      let todayExpenses = 0;
+      // Process general expenses (transactions)
       if (transactionsRes.data) {
         const transactions = transactionsRes.data.results || transactionsRes.data || [];
         transactions.forEach((t: any) => {
           if (t.type === 'expense') {
-            todayExpenses += toNumber(t.amount);
+            const amount = toNumber(t.amount);
+            otherExpensesTotal += amount;
+            
             transactionsList.push({
               id: t.id,
               invoice_number: t.reference || `EXP-${t.id}`,
               customer_name: t.category || 'Expense',
-              amount: toNumber(t.amount),
+              amount: amount,
               type: 'expense',
               payment_method: t.payment_method || 'cash',
               time: t.created_at,
+              source: 'expense',
             });
           }
+        });
+      }
+
+      // Process petty cash (small expenses)
+      if (pettyCashRes.data) {
+        const pettyCashList = pettyCashRes.data.results || pettyCashRes.data || [];
+        pettyCashList.forEach((p: any) => {
+          const amount = toNumber(p.amount);
+          pettyCashTotal += amount;
+          
+          transactionsList.push({
+            id: p.id,
+            invoice_number: `PC-${p.id}`,
+            customer_name: p.purpose || 'Petty Cash',
+            amount: amount,
+            type: 'expense',
+            payment_method: 'cash',
+            time: p.date || p.created_at,
+            source: 'petty_cash',
+          });
+        });
+      }
+
+      // Process payroll (salaries for today/this month - only if paid today)
+      if (payrollRes.data && payrollRes.data.results) {
+        const currentMonth = new Date().getMonth() + 1;
+        const currentYear = new Date().getFullYear();
+        const payrolls = payrollRes.data.results || [];
+        
+        // Check for payroll paid today or this month
+        const todayStr = startDate;
+        const payrollForToday = payrolls.filter((p: any) => {
+          const paidDate = p.paid_date ? new Date(p.paid_date).toISOString().split('T')[0] : null;
+          return paidDate === todayStr && p.status === 'paid';
+        });
+        
+        payrollForToday.forEach((p: any) => {
+          const amount = toNumber(p.total_net_salary);
+          payrollTotal += amount;
+          
+          transactionsList.push({
+            id: p.id,
+            invoice_number: `PAYROLL-${p.month}-${p.year}`,
+            customer_name: 'Payroll',
+            amount: amount,
+            type: 'expense',
+            payment_method: 'bank_transfer',
+            time: p.paid_date || p.processed_date,
+            source: 'payroll',
+          });
+        });
+      }
+
+      // Process invoice expenses (payments to suppliers)
+      const invoicesRes = await financialsApi.getInvoices({ 
+        status: 'paid',
+        start_date: startDate,
+        end_date: endDate,
+        page_size: 100 
+      }).catch(() => ({ data: null }));
+      
+      if (invoicesRes?.data) {
+        const paidInvoices = invoicesRes.data.results || invoicesRes.data || [];
+        paidInvoices.forEach((inv: any) => {
+          const amount = toNumber(inv.total_amount);
+          invoiceExpensesTotal += amount;
+          
+          transactionsList.push({
+            id: inv.id,
+            invoice_number: inv.invoice_number,
+            customer_name: inv.customer_name || 'Supplier',
+            amount: amount,
+            type: 'expense',
+            payment_method: inv.payment_method || 'bank_transfer',
+            time: inv.payment_date || inv.created_at,
+            source: 'invoice',
+          });
         });
       }
 
       // Sort transactions by time (newest first)
       transactionsList.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
 
-      const todayProfit = todayRevenue - todayExpenses;
+      const totalExpenses = pettyCashTotal + invoiceExpensesTotal + payrollTotal + otherExpensesTotal;
+      const todayProfit = todayRevenue - totalExpenses;
       const profitMargin = todayRevenue > 0 ? (todayProfit / todayRevenue) * 100 : 0;
       const avgOrderValue = todayTransactions > 0 ? todayRevenue / todayTransactions : 0;
 
       setTodayCashflow({
         revenue: todayRevenue,
-        expenses: todayExpenses,
+        expenses: totalExpenses,
         profit: todayProfit,
         profitMargin: profitMargin,
         transactions: todayTransactions,
@@ -217,7 +327,15 @@ export default function DashboardPage() {
         total: todayRevenue,
       });
 
-      setRecentTransactions(transactionsList.slice(0, 10));
+      setExpenseBreakdown({
+        pettyCash: pettyCashTotal,
+        invoices: invoiceExpensesTotal,
+        payroll: payrollTotal,
+        other: otherExpensesTotal,
+        total: totalExpenses,
+      });
+
+      setRecentTransactions(transactionsList.slice(0, 15));
       
     } catch (err: any) {
       console.error('Dashboard API Error:', err);
@@ -242,6 +360,10 @@ export default function DashboardPage() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
             {[1, 2, 3].map(i => <div key={i} className="h-32 bg-gray-100 rounded-2xl"></div>)}
           </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <div className="h-64 bg-gray-100 rounded-2xl"></div>
+            <div className="h-64 bg-gray-100 rounded-2xl"></div>
+          </div>
           <div className="h-96 bg-gray-100 rounded-2xl"></div>
         </div>
       </div>
@@ -254,7 +376,7 @@ export default function DashboardPage() {
         <div className="bg-red-50 border border-red-200 rounded-xl p-6 text-center">
           <FiAlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
           <p className="text-red-600">{error}</p>
-          <button onClick={fetchTodayData} className="mt-4 px-4 py-2 bg-brand-500 text-white rounded-lg">
+          <button onClick={fetchTodayData} className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg">
             Try Again
           </button>
         </div>
@@ -354,69 +476,94 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Payment Method Breakdown */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-6">
+      {/* Expense Breakdown Section */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-6">
+        {/* Payment Method Breakdown */}
         <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
-              <FiDollarSign className="w-5 h-5 text-green-600" />
+          <div className="flex items-center gap-2 mb-4">
+            <FiCreditCard className="text-blue-600" size={18} />
+            <h3 className="font-semibold text-gray-900">Payment Methods</h3>
+          </div>
+          <div className="space-y-4">
+            <div>
+              <div className="flex justify-between text-sm mb-1">
+                <span className="text-gray-600">Cash</span>
+                <span className="font-medium text-green-600">{formatCurrency(paymentBreakdown.cash)}</span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div 
+                  className="bg-green-500 h-2 rounded-full" 
+                  style={{ width: `${paymentBreakdown.total > 0 ? (paymentBreakdown.cash / paymentBreakdown.total) * 100 : 0}%` }}
+                />
+              </div>
             </div>
             <div>
-              <p className="text-sm font-medium text-gray-900">Cash Payments</p>
-              <p className="text-2xl font-bold text-gray-900">{formatCurrency(paymentBreakdown.cash)}</p>
+              <div className="flex justify-between text-sm mb-1">
+                <span className="text-gray-600">M-Pesa</span>
+                <span className="font-medium text-blue-600">{formatCurrency(paymentBreakdown.mpesa)}</span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div 
+                  className="bg-blue-500 h-2 rounded-full" 
+                  style={{ width: `${paymentBreakdown.total > 0 ? (paymentBreakdown.mpesa / paymentBreakdown.total) * 100 : 0}%` }}
+                />
+              </div>
+            </div>
+            <div>
+              <div className="flex justify-between text-sm mb-1">
+                <span className="text-gray-600">Card</span>
+                <span className="font-medium text-purple-600">{formatCurrency(paymentBreakdown.card)}</span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div 
+                  className="bg-purple-500 h-2 rounded-full" 
+                  style={{ width: `${paymentBreakdown.total > 0 ? (paymentBreakdown.card / paymentBreakdown.total) * 100 : 0}%` }}
+                />
+              </div>
             </div>
           </div>
-          <div className="w-full bg-gray-200 rounded-full h-2">
-            <div 
-              className="bg-green-500 h-2 rounded-full" 
-              style={{ width: `${paymentBreakdown.total > 0 ? (paymentBreakdown.cash / paymentBreakdown.total) * 100 : 0}%` }}
-            />
-          </div>
-          <p className="text-xs text-gray-500 mt-2">
-            {paymentBreakdown.total > 0 ? ((paymentBreakdown.cash / paymentBreakdown.total) * 100).toFixed(0) : 0}% of today's sales
-          </p>
         </div>
 
+        {/* Expense Sources Breakdown */}
         <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
-              <FiSmartphone className="w-5 h-5 text-blue-600" />
+          <div className="flex items-center gap-2 mb-4">
+            <FiPackage className="text-red-600" size={18} />
+            <h3 className="font-semibold text-gray-900">Expense Sources</h3>
+          </div>
+          <div className="space-y-3">
+            <div className="flex justify-between items-center p-2 bg-gray-50 rounded-lg">
+              <div className="flex items-center gap-2">
+                <FiHome className="text-amber-600" size={14} />
+                <span className="text-sm text-gray-700">Petty Cash</span>
+              </div>
+              <span className="font-medium text-red-600">{formatCurrency(expenseBreakdown.pettyCash)}</span>
             </div>
-            <div>
-              <p className="text-sm font-medium text-gray-900">M-Pesa Payments</p>
-              <p className="text-2xl font-bold text-gray-900">{formatCurrency(paymentBreakdown.mpesa)}</p>
+            <div className="flex justify-between items-center p-2 bg-gray-50 rounded-lg">
+              <div className="flex items-center gap-2">
+                <FiFileText className="text-blue-600" size={14} />
+                <span className="text-sm text-gray-700">Invoice Payments</span>
+              </div>
+              <span className="font-medium text-red-600">{formatCurrency(expenseBreakdown.invoices)}</span>
+            </div>
+            <div className="flex justify-between items-center p-2 bg-gray-50 rounded-lg">
+              <div className="flex items-center gap-2">
+                <FiBriefcase className="text-purple-600" size={14} />
+                <span className="text-sm text-gray-700">Payroll</span>
+              </div>
+              <span className="font-medium text-red-600">{formatCurrency(expenseBreakdown.payroll)}</span>
+            </div>
+            <div className="flex justify-between items-center p-2 bg-gray-50 rounded-lg">
+              <div className="flex items-center gap-2">
+                <FiPackage className="text-gray-600" size={14} />
+                <span className="text-sm text-gray-700">Other Expenses</span>
+              </div>
+              <span className="font-medium text-red-600">{formatCurrency(expenseBreakdown.other)}</span>
+            </div>
+            <div className="border-t border-gray-200 pt-2 mt-2 flex justify-between font-semibold">
+              <span>Total Expenses</span>
+              <span className="text-red-600">{formatCurrency(expenseBreakdown.total)}</span>
             </div>
           </div>
-          <div className="w-full bg-gray-200 rounded-full h-2">
-            <div 
-              className="bg-blue-500 h-2 rounded-full" 
-              style={{ width: `${paymentBreakdown.total > 0 ? (paymentBreakdown.mpesa / paymentBreakdown.total) * 100 : 0}%` }}
-            />
-          </div>
-          <p className="text-xs text-gray-500 mt-2">
-            {paymentBreakdown.total > 0 ? ((paymentBreakdown.mpesa / paymentBreakdown.total) * 100).toFixed(0) : 0}% of today's sales
-          </p>
-        </div>
-
-        <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center">
-              <FiCreditCard className="w-5 h-5 text-purple-600" />
-            </div>
-            <div>
-              <p className="text-sm font-medium text-gray-900">Card Payments</p>
-              <p className="text-2xl font-bold text-gray-900">{formatCurrency(paymentBreakdown.card)}</p>
-            </div>
-          </div>
-          <div className="w-full bg-gray-200 rounded-full h-2">
-            <div 
-              className="bg-purple-500 h-2 rounded-full" 
-              style={{ width: `${paymentBreakdown.total > 0 ? (paymentBreakdown.card / paymentBreakdown.total) * 100 : 0}%` }}
-            />
-          </div>
-          <p className="text-xs text-gray-500 mt-2">
-            {paymentBreakdown.total > 0 ? ((paymentBreakdown.card / paymentBreakdown.total) * 100).toFixed(0) : 0}% of today's sales
-          </p>
         </div>
       </div>
 
@@ -446,9 +593,9 @@ export default function DashboardPage() {
               </div>
               <span className="text-xs text-gray-400">{recentTransactions.length} transactions</span>
             </div>
-            <p className="text-xs text-gray-500 mt-1">Latest sales and expenses from today</p>
+            <p className="text-xs text-gray-500 mt-1">Latest sales, expenses, petty cash, and invoices from today</p>
           </div>
-          <div className="max-h-[400px] overflow-y-auto p-3 space-y-3">
+          <div className="max-h-[500px] overflow-y-auto p-3 space-y-3">
             {recentTransactions.length === 0 ? (
               <div className="text-center py-12 text-gray-400">
                 <FiShoppingCart className="w-10 h-10 mx-auto mb-2 opacity-50" />
@@ -456,7 +603,7 @@ export default function DashboardPage() {
               </div>
             ) : (
               recentTransactions.map((transaction) => (
-                <div key={transaction.id} className="p-3 bg-gray-50 rounded-xl hover:bg-gray-100 transition">
+                <div key={`${transaction.source}-${transaction.id}`} className="p-3 bg-gray-50 rounded-xl hover:bg-gray-100 transition">
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-1">
@@ -469,11 +616,27 @@ export default function DashboardPage() {
                             Expense
                           </span>
                         )}
+                        {transaction.source === 'petty_cash' && (
+                          <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">
+                            Petty Cash
+                          </span>
+                        )}
+                        {transaction.source === 'invoice' && (
+                          <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
+                            Invoice
+                          </span>
+                        )}
+                        {transaction.source === 'payroll' && (
+                          <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">
+                            Payroll
+                          </span>
+                        )}
                         <span className="text-xs text-gray-400">{transaction.invoice_number}</span>
                       </div>
                       <p className="text-sm text-gray-600">
                         <span className="font-medium">{transaction.customer_name}</span>
                         {transaction.type === 'income' && <span className="text-gray-400"> made a purchase</span>}
+                        {transaction.type === 'expense' && <span className="text-gray-400"> was recorded</span>}
                       </p>
                       <div className="flex items-center gap-3 mt-1">
                         <p className="text-xs text-gray-400">

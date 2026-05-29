@@ -90,6 +90,7 @@ const navItems: NavItem[] = [
       { name: 'Invoices', href: '/financials/invoices', module: 'financials' },
       { name: 'Petty Cash', href: '/financials/petty-cash', module: 'financials' },
       { name: 'Loans', href: '/financials/loans', module: 'financials' },
+      { name: 'Budget', href: '/financials/budgets', module: 'financials' },
     ],
   },
   {

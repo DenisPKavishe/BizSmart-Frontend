@@ -127,6 +127,64 @@ deletePettyCash: (id: number) =>
 
   deleteLoan: (id: number) => 
   api.delete(`/financials/loans/${id}/`),
+
+  // Budget CRUD
+  getBudgets: (params?: { period?: string; year?: number; status?: string }) => 
+    api.get('/financials/budgets/', { params }),
+  
+  getBudget: (id: number) => 
+    api.get(`/financials/budgets/${id}/`),
+  
+  createBudget: (data: { 
+    name: string; 
+    period: 'monthly' | 'quarterly' | 'yearly'; 
+    year: number; 
+    month?: number; 
+    quarter?: number;
+    status?: 'draft' | 'active' | 'archived';
+    notes?: string;
+  }) => api.post('/financials/budgets/', data),
+  
+  updateBudget: (id: number, data: any) => 
+    api.put(`/financials/budgets/${id}/`, data),
+  
+  deleteBudget: (id: number) => 
+    api.delete(`/financials/budgets/${id}/`),
+  
+  // Budget Items
+  getBudgetItems: (budgetId: number) => 
+    api.get(`/financials/budgets/${budgetId}/items/`),
+  
+  addBudgetItem: (budgetId: number, data: { 
+    category: string; 
+    category_name: string; 
+    type: 'income' | 'expense'; 
+    planned_amount: number;
+    notes?: string;
+  }) => api.post(`/financials/budgets/${budgetId}/items/`, data),
+  
+  updateBudgetItem: (budgetId: number, itemId: number, data: any) => 
+    api.put(`/financials/budgets/${budgetId}/items/${itemId}/`, data),
+  
+  deleteBudgetItem: (budgetId: number, itemId: number) => 
+    api.delete(`/financials/budgets/${budgetId}/items/${itemId}/`),
+  
+  // Budget vs Actual
+  getBudgetVsActual: (budgetId: number, params?: { start_date?: string; end_date?: string }) => 
+    api.get(`/financials/budgets/${budgetId}/vs-actual/`, { params }),
+  
+  // Copy Budget
+  copyBudget: (fromBudgetId: number, toData: { 
+    name?: string; 
+    year: number; 
+    period?: string; 
+    month?: number; 
+    quarter?: number;
+  }) => api.post(`/financials/budgets/${fromBudgetId}/copy/`, toData),
+  
+  // Budget Summary
+  getBudgetSummary: (year: number, period?: 'monthly' | 'quarterly' | 'yearly') => 
+    api.get('/financials/budgets/summary/', { params: { year, period } }),
   
   
   // Cash Flow
@@ -201,6 +259,9 @@ export const inventoryApi = {
   getPurchaseOrders: () => api.get('/inventory/purchase-orders/'),
   
   getPurchaseOrder: (id: number) => api.get(`/inventory/purchase-orders/${id}/`),
+
+  receivePurchaseOrder: (poId: number, data: any) => 
+    api.post(`/inventory/purchase-orders/${poId}/receive/`, data),
   
   createPurchaseOrder: (data: any) => api.post('/inventory/purchase-orders/', data),
   
@@ -210,6 +271,9 @@ export const inventoryApi = {
   
   receivePurchaseOrderItem: (poId: number, data: any) => 
     api.post(`/inventory/purchase-orders/${poId}/receive/`, data),
+
+  getProductByBarcode: (barcode: string) => 
+    api.get(`/inventory/products/barcode/${barcode}/`),  
 };  
 
 // ==================== SALES ====================

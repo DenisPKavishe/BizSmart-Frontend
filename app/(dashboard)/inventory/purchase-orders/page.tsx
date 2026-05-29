@@ -1,4 +1,4 @@
-// app/(dashboard)/inventory/purchase-orders/page.tsx - COMPLETE WORKING CODE
+// app/(dashboard)/inventory/purchase-orders/page.tsx - COMPLETELY FIXED
 
 'use client';
 
@@ -197,14 +197,16 @@ function ReceiveItemsModal({ isOpen, onClose, onSuccess, purchaseOrder }: any) {
     setIsSubmitting(true);
     
     try {
-      for (const item of itemsToReceive) {
-        await inventoryApi.receivePurchaseOrderItem(purchaseOrder.id, {
-          po_item_id: item.id,
+      const receiveData = {
+        items: itemsToReceive.map(item => ({
+          item_id: item.id,
           product_id: item.product_id,
           quantity: item.receiving_quantity,
           unit_cost: item.unit_cost,
-        });
-      }
+        }))
+      };
+      
+      await inventoryApi.receivePurchaseOrder(purchaseOrder.id, receiveData);
       
       toast.success(`Successfully received ${itemsToReceive.reduce((sum, item) => sum + item.receiving_quantity, 0)} items`);
       onSuccess();
@@ -677,9 +679,6 @@ function PurchaseOrderModal({ isOpen, onClose, onSuccess, purchaseOrder, supplie
         notes: formData.notes || '',
         status: formData.status,
         business: user?.business,
-        subtotal: subtotal.toFixed(2),
-        tax_amount: tax.toFixed(2),
-        total_amount: total.toFixed(2),
         items: formattedItems,
       };
 
@@ -1061,6 +1060,7 @@ export default function PurchaseOrdersPage() {
 
   return (
     <div className="p-4 md:p-6">
+      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Purchase Orders</h1>
@@ -1075,6 +1075,7 @@ export default function PurchaseOrdersPage() {
         </button>
       </div>
 
+      {/* Stats Summary */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
         <div className="bg-white rounded-xl p-4 border border-gray-200">
           <div className="flex items-center justify-between">
@@ -1128,6 +1129,7 @@ export default function PurchaseOrdersPage() {
         </div>
       </div>
 
+      {/* Search and Filter Bar */}
       <div className="bg-white rounded-xl border border-gray-200 p-4 mb-6">
         <div className="flex flex-col sm:flex-row gap-4">
           <div className="flex-1 relative">
@@ -1158,6 +1160,7 @@ export default function PurchaseOrdersPage() {
         </div>
       </div>
 
+      {/* Filters Panel */}
       {showFilters && (
         <div className="bg-white rounded-xl border border-gray-200 p-4 mb-6">
           <div className="flex justify-between items-center mb-4">
@@ -1185,17 +1188,18 @@ export default function PurchaseOrdersPage() {
         </div>
       )}
 
+      {/* Purchase Orders Table */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">PO Number</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Supplier</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Order Date</th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Total Amount</th>
-                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Status</th>
-                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Actions</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">PO Number</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Supplier</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Order Date</th>
+              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Total Amount</th>
+              <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Status</th>
+              <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -1274,6 +1278,7 @@ export default function PurchaseOrdersPage() {
           </table>
         </div>
 
+        {/* Pagination */}
         {totalPages > 1 && (
           <div className="px-6 py-4 border-t border-gray-200 flex justify-between items-center">
             <p className="text-sm text-gray-500">Page {currentPage} of {totalPages}</p>
@@ -1297,6 +1302,7 @@ export default function PurchaseOrdersPage() {
         )}
       </div>
 
+      {/* Modals */}
       <PurchaseOrderModal
         isOpen={showModal}
         onClose={() => {

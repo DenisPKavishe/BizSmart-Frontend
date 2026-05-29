@@ -26,6 +26,8 @@ This project uses [`next/font`](https://nextjs.org/docs/app/building-your-applic
 - npm install axios zustand jwt-decode react-hot-toast react-hook-form date-fns react-icons recharts
 
 
+python manage.py runserver 0.0.0.0:8000
+
 
 curl -X POST 'http://localhost:8000/api/v1/inventory/purchase-orders/' \
   -H 'Content-Type: application/json' \
