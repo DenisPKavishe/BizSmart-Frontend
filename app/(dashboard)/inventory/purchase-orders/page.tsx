@@ -272,7 +272,7 @@ function ReceiveItemsModal({ isOpen, onClose, onSuccess, purchaseOrder }: any) {
                     <div className="flex justify-between items-start mb-3">
                       <div className="flex-1">
                         <p className="font-medium text-gray-900">{item.product_name}</p>
-                        <p className="text-xs text-gray-500">Unit Cost: ${item.unit_cost.toFixed(2)}</p>
+                        <p className="text-xs text-gray-500">Unit Cost: TZS{item.unit_cost.toFixed(2)}</p>
                       </div>
                       <div className="text-right">
                         <p className="text-sm text-gray-600">Ordered: <span className="font-medium">{item.ordered_quantity}</span></p>
@@ -310,7 +310,7 @@ function ReceiveItemsModal({ isOpen, onClose, onSuccess, purchaseOrder }: any) {
                     
                     {item.receiving_quantity > 0 && (
                       <div className="mt-2 p-2 bg-green-50 rounded text-sm text-green-700">
-                        You will receive: {item.receiving_quantity} × ${item.unit_cost.toFixed(2)} = ${(item.receiving_quantity * item.unit_cost).toFixed(2)}
+                        You will receive: {item.receiving_quantity} × TZS{item.unit_cost.toFixed(2)} = TZS{(item.receiving_quantity * item.unit_cost).toFixed(2)}
                       </div>
                     )}
                   </div>
@@ -330,7 +330,7 @@ function ReceiveItemsModal({ isOpen, onClose, onSuccess, purchaseOrder }: any) {
                       <div className="flex justify-between pt-2 border-t">
                         <span className="text-sm font-medium text-gray-700">Total Value:</span>
                         <span className="text-sm font-bold text-green-600">
-                          ${items.reduce((sum, item) => sum + (item.receiving_quantity * item.unit_cost), 0).toFixed(2)}
+                          TZS{items.reduce((sum, item) => sum + (item.receiving_quantity * item.unit_cost), 0).toFixed(2)}
                         </span>
                       </div>
                     )}
@@ -455,8 +455,8 @@ function ViewPOModal({ isOpen, onClose, purchaseOrder, onReceive, onEdit }: any)
                             <td className="px-4 py-2 text-sm text-gray-600 text-right">{orderedQty}</td>
                             <td className="px-4 py-2 text-sm text-green-600 text-right">{receivedQty}</td>
                             <td className="px-4 py-2 text-sm text-amber-600 text-right">{remainingQty}</td>
-                            <td className="px-4 py-2 text-sm text-gray-600 text-right">${parseFloat(item.unit_cost).toFixed(2)}</td>
-                            <td className="px-4 py-2 text-sm text-gray-600 text-right">${parseFloat(item.total_cost).toFixed(2)}</td>
+                            <td className="px-4 py-2 text-sm text-gray-600 text-right">TZS{parseFloat(item.unit_cost).toFixed(2)}</td>
+                            <td className="px-4 py-2 text-sm text-gray-600 text-right">TZS{parseFloat(item.total_cost).toFixed(2)}</td>
                           </tr>
                         );
                       })}
@@ -464,16 +464,12 @@ function ViewPOModal({ isOpen, onClose, purchaseOrder, onReceive, onEdit }: any)
                     <tfoot className="bg-gray-50">
                       <tr>
                         <td colSpan={5} className="px-4 py-2 text-right text-sm font-medium">Subtotal:</td>
-                        <td className="px-4 py-2 text-right text-sm">${parseFloat(purchaseOrder.subtotal).toFixed(2)}</td>
-                      </tr>
-                      <tr>
-                        <td colSpan={5} className="px-4 py-2 text-right text-sm font-medium">Tax (18%):</td>
-                        <td className="px-4 py-2 text-right text-sm">${parseFloat(purchaseOrder.tax_amount).toFixed(2)}</td>
+                        <td className="px-4 py-2 text-right text-sm">TZS{parseFloat(purchaseOrder.subtotal).toFixed(2)}</td>
                       </tr>
                       <tr>
                         <td colSpan={5} className="px-4 py-2 text-right text-sm font-bold">Total:</td>
                         <td className="px-4 py-2 text-right text-sm font-bold text-blue-600">
-                          ${parseFloat(purchaseOrder.total_amount).toFixed(2)}
+                          TZS{parseFloat(purchaseOrder.total_amount).toFixed(2)}
                         </td>
                       </tr>
                     </tfoot>
@@ -646,12 +642,12 @@ function PurchaseOrderModal({ isOpen, onClose, onSuccess, purchaseOrder, supplie
 
   const calculateTotals = () => {
     const subtotal = formData.items.reduce((sum, item) => sum + (item.quantity * item.unit_cost), 0);
-    const tax = subtotal * 0.18;
-    const total = subtotal + tax;
-    return { subtotal, tax, total };
+    const tax = subtotal;
+    const total = subtotal;
+    return { subtotal, total };
   };
 
-  const { subtotal, tax, total } = calculateTotals();
+  const { subtotal, total } = calculateTotals();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -848,7 +844,7 @@ function PurchaseOrderModal({ isOpen, onClose, onSuccess, purchaseOrder, supplie
                             />
                           </td>
                           <td className="px-3 py-2 text-right text-sm">
-                            ${(item.quantity * item.unit_cost).toFixed(2)}
+                            TZS{(item.quantity * item.unit_cost).toFixed(2)}
                           </td>
                           <td className="px-3 py-2 text-center">
                             <button
@@ -867,15 +863,11 @@ function PurchaseOrderModal({ isOpen, onClose, onSuccess, purchaseOrder, supplie
                     <tfoot className="bg-gray-50">
                       <tr>
                         <td colSpan={3} className="px-3 py-2 text-right text-sm font-medium">Subtotal:</td>
-                        <td className="px-3 py-2 text-right text-sm">${subtotal.toFixed(2)}</td>
-                      </tr>
-                      <tr>
-                        <td colSpan={3} className="px-3 py-2 text-right text-sm font-medium">Tax (18%):</td>
-                        <td className="px-3 py-2 text-right text-sm">${tax.toFixed(2)}</td>
+                        <td className="px-3 py-2 text-right text-sm">TZS{subtotal.toFixed(2)}</td>
                       </tr>
                       <tr>
                         <td colSpan={3} className="px-3 py-2 text-right text-sm font-bold">Total:</td>
-                        <td className="px-3 py-2 text-right text-sm font-bold text-blue-600">${total.toFixed(2)}</td>
+                        <td className="px-3 py-2 text-right text-sm font-bold text-blue-600">TZS{total.toFixed(2)}</td>
                       </tr>
                     </tfoot>
                   )}
@@ -1119,7 +1111,7 @@ export default function PurchaseOrdersPage() {
             <div>
               <p className="text-xs text-gray-500">Total Spent</p>
               <p className="text-2xl font-bold text-purple-600">
-                ${purchaseOrders.reduce((sum, po) => sum + parseFloat(po.total_amount || '0'), 0).toFixed(0)}
+                TZS{purchaseOrders.reduce((sum, po) => sum + parseFloat(po.total_amount || '0'), 0).toFixed(0)}
               </p>
             </div>
             <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
@@ -1229,7 +1221,7 @@ export default function PurchaseOrdersPage() {
                     </td>
                     <td className="px-6 py-4 text-right">
                       <span className="text-sm font-semibold text-gray-900">
-                        ${parseFloat(po.total_amount).toFixed(2)}
+                        TZS{parseFloat(po.total_amount).toFixed(2)}
                       </span>
                     </td>
                     <td className="px-6 py-4 text-center">

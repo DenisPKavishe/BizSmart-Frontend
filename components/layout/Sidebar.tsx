@@ -79,6 +79,7 @@ const navItems: NavItem[] = [
       { name: 'Categories', href: '/inventory/categories', module: 'inventory' },
       { name: 'Suppliers', href: '/inventory/suppliers', module: 'inventory' },
       { name: 'Stock Movements', href: '/inventory/stock-movements', module: 'inventory' },
+      { name: 'Purchase Orders', href: '/inventory/purchase-orders', module: 'inventory' },
     ],
   },
   {

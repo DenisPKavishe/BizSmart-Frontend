@@ -1,4 +1,5 @@
-// app/(dashboard)/financials/invoices/page.tsx
+// app/(dashboard)/financials/invoices/page.tsx - COMPLETE FIXED VERSION
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -32,7 +33,7 @@ interface Product {
   id: number;
   name: string;
   sku: string;
-  selling_price: number;
+  selling_price: number | string;
   quantity_on_hand: number;
 }
 
@@ -55,7 +56,6 @@ interface Invoice {
   issue_date: string;
   due_date: string;
   subtotal: number;
-  tax_amount: number;
   total_amount: number;
   amount_paid: number;
   balance_due: number;
@@ -109,6 +109,17 @@ export default function InvoicesPage() {
   const [totalItems, setTotalItems] = useState(0);
   const [totalOutstanding, setTotalOutstanding] = useState(0);
 
+  // Helper function to parse price to number
+  const parsePrice = (price: number | string | undefined): number => {
+    if (price === undefined || price === null) return 0;
+    if (typeof price === 'number') return price;
+    if (typeof price === 'string') {
+      const parsed = parseFloat(price);
+      return isNaN(parsed) ? 0 : parsed;
+    }
+    return 0;
+  };
+
   useEffect(() => {
     fetchData();
   }, [currentPage, statusFilter, startDate, endDate]);
@@ -128,7 +139,23 @@ export default function InvoicesPage() {
         inventoryApi.getProducts(),
       ]);
       
-      const invoicesData = invoicesRes.data.results || invoicesRes.data;
+      let invoicesData = invoicesRes.data.results || invoicesRes.data || [];
+      
+      // Convert all numeric fields to numbers for each invoice
+      invoicesData = invoicesData.map((invoice: any) => ({
+        ...invoice,
+        subtotal: parsePrice(invoice.subtotal),
+        total_amount: parsePrice(invoice.total_amount),
+        amount_paid: parsePrice(invoice.amount_paid),
+        balance_due: parsePrice(invoice.balance_due),
+        items: (invoice.items || []).map((item: any) => ({
+          ...item,
+          unit_price: parsePrice(item.unit_price),
+          total: parsePrice(item.total),
+          quantity: parsePrice(item.quantity),
+        })),
+      }));
+      
       setInvoices(invoicesData);
       setTotalPages(Math.ceil((invoicesRes.data.count || invoicesData.length) / 20));
       setTotalItems(invoicesRes.data.count || invoicesData.length);
@@ -136,12 +163,21 @@ export default function InvoicesPage() {
       // Calculate total outstanding
       let outstanding = 0;
       for (let i = 0; i < invoicesData.length; i++) {
-        outstanding = outstanding + (parseFloat(invoicesData[i].balance_due) || 0);
+        outstanding = outstanding + (parsePrice(invoicesData[i].balance_due) || 0);
       }
       setTotalOutstanding(outstanding);
       
-      setCustomers(customersRes.data.results || customersRes.data);
-      setProducts(productsRes.data.results || productsRes.data);
+      let customersData = customersRes.data.results || customersRes.data || [];
+      let productsData = productsRes.data.results || productsRes.data || [];
+      
+      // Convert product selling_price to number
+      productsData = productsData.map((product: any) => ({
+        ...product,
+        selling_price: parsePrice(product.selling_price)
+      }));
+      
+      setCustomers(customersData);
+      setProducts(productsData);
       
     } catch (error) {
       console.error('Failed to fetch data:', error);
@@ -173,16 +209,18 @@ export default function InvoicesPage() {
 
   // Add product to invoice items
   const addProductToInvoice = (product: Product) => {
+    const price = parsePrice(product.selling_price);
+    
     const existingItem = formData.items.find(item => item.product_id === product.id);
     
     if (existingItem) {
       const newQuantity = existingItem.quantity + 1;
-      const newTotal = newQuantity * product.selling_price;
+      const newTotal = newQuantity * price;
       setFormData(prev => ({
         ...prev,
         items: prev.items.map(item =>
           item.product_id === product.id
-            ? { ...item, quantity: newQuantity, total: newTotal }
+            ? { ...item, quantity: newQuantity, total: newTotal, unit_price: price }
             : item
         ),
       }));
@@ -194,8 +232,8 @@ export default function InvoicesPage() {
           product_name: product.name,
           description: product.name,
           quantity: 1,
-          unit_price: product.selling_price,
-          total: product.selling_price,
+          unit_price: price,
+          total: price,
         }],
       }));
     }
@@ -213,7 +251,7 @@ export default function InvoicesPage() {
       return;
     }
     
-    const newTotal = newQuantity * item.unit_price;
+    const newTotal = newQuantity * parsePrice(item.unit_price);
     const newItems = [...formData.items];
     newItems[index] = { ...newItems[index], quantity: newQuantity, total: newTotal };
     setFormData(prev => ({ ...prev, items: newItems }));
@@ -225,14 +263,13 @@ export default function InvoicesPage() {
     setFormData(prev => ({ ...prev, items: newItems }));
   };
 
+  // Calculate totals - NO TAX
   const calculateTotals = () => {
-    const subtotal = formData.items.reduce((sum, item) => sum + (item.total || 0), 0);
-    const tax_amount = subtotal * 0.18;
-    const total_amount = subtotal + tax_amount;
-    return { subtotal, tax_amount, total_amount };
+    const total_amount = formData.items.reduce((sum, item) => sum + (parsePrice(item.total) || 0), 0);
+    return { total_amount };
   };
 
-  const { subtotal, tax_amount, total_amount } = calculateTotals();
+  const { total_amount } = calculateTotals();
 
   const openCreateModal = () => {
     setEditingInvoice(null);
@@ -265,8 +302,8 @@ export default function InvoicesPage() {
         product_name: item.description,
         description: item.description,
         quantity: item.quantity,
-        unit_price: item.unit_price,
-        total: item.total,
+        unit_price: parsePrice(item.unit_price),
+        total: parsePrice(item.total),
       })),
     });
     setShowModal(true);
@@ -288,7 +325,7 @@ export default function InvoicesPage() {
     setIsSubmitting(true);
 
     try {
-      const { subtotal: sub, tax_amount: tax, total_amount: total } = calculateTotals();
+      const { total_amount: total } = calculateTotals();
       
       const invoiceNumber = `INV-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
       
@@ -300,8 +337,7 @@ export default function InvoicesPage() {
         issue_date: formData.issue_date,
         due_date: formData.due_date,
         business: user?.business,
-        subtotal: sub,
-        tax_amount: tax,
+        subtotal: total,
         total_amount: total,
         notes: formData.notes,
         items: formData.items.map(item => ({
@@ -354,39 +390,27 @@ export default function InvoicesPage() {
     }
   };
 
-  const handleCancel = async (invoice: Invoice) => {
-    if (confirm(`Cancel invoice ${invoice.invoice_number}?`)) {
-      try {
-        await financialsApi.updateInvoice(invoice.id, { status: 'cancelled' });
-        toast.success('Invoice cancelled successfully');
-        fetchData();
-      } catch (error) {
-        console.error('Failed to cancel invoice:', error);
-        toast.error('Failed to cancel invoice');
-      }
-    }
-  };
-
-  const handleRecordPayment = async (invoice: Invoice) => {
+  const handleRecordPayment = (invoice: Invoice) => {
     setSelectedInvoice(invoice);
-    setPaymentAmount(invoice.balance_due);
+    setPaymentAmount(parsePrice(invoice.balance_due));
     setShowPaymentModal(true);
   };
 
   const submitPayment = async () => {
     if (!selectedInvoice) return;
-    if (paymentAmount <= 0) {
+    const amount = parsePrice(paymentAmount);
+    if (amount <= 0) {
       toast.error('Please enter a valid amount');
       return;
     }
-    if (paymentAmount > selectedInvoice.balance_due) {
+    if (amount > parsePrice(selectedInvoice.balance_due)) {
       toast.error('Payment amount exceeds balance due');
       return;
     }
 
     setIsSubmitting(true);
     try {
-      await financialsApi.recordPayment(selectedInvoice.id, paymentAmount);
+      await financialsApi.recordPayment(selectedInvoice.id, amount);
       toast.success('Payment recorded successfully');
       setShowPaymentModal(false);
       fetchData();
@@ -403,9 +427,10 @@ export default function InvoicesPage() {
     setShowDetailModal(true);
   };
 
-  const formatCurrency = (value: number) => {
-    if (!value && value !== 0) return 'TZS 0';
-    return `TZS ${value.toLocaleString()}`;
+  const formatCurrency = (value: number | string | undefined) => {
+    const num = parsePrice(value);
+    if (num === 0) return 'TZS 0';
+    return `TZS ${num.toLocaleString()}`;
   };
 
   const formatDate = (dateString: string) => {
@@ -628,10 +653,10 @@ export default function InvoicesPage() {
                     <td className="px-6 py-4 text-sm text-gray-500">{formatDate(invoice.issue_date)}</td>
                     <td className="px-6 py-4 text-sm text-gray-500">{formatDate(invoice.due_date)}</td>
                     <td className="px-6 py-4 text-right text-sm font-semibold text-gray-900">
-                      {formatCurrency(invoice.total_amount)}
+                      {formatCurrency(parsePrice(invoice.total_amount))}
                     </td>
                     <td className="px-6 py-4 text-right text-sm font-semibold text-amber-600">
-                      {formatCurrency(invoice.balance_due)}
+                      {formatCurrency(parsePrice(invoice.balance_due))}
                     </td>
                     <td className="px-6 py-4 text-center">
                       {getStatusBadge(invoice.status, invoice.is_overdue)}
@@ -859,10 +884,10 @@ export default function InvoicesPage() {
                             />
                           </div>
                           <div className="col-span-3">
-                            <p className="text-right text-gray-600">{formatCurrency(item.unit_price)}</p>
+                            <p className="text-right text-gray-600">{formatCurrency(parsePrice(item.unit_price))}</p>
                           </div>
                           <div className="col-span-1 text-right">
-                            <p className="font-medium text-gray-900">{formatCurrency(item.total)}</p>
+                            <p className="font-medium text-gray-900">{formatCurrency(parsePrice(item.total))}</p>
                           </div>
                           <div className="col-span-1 text-right">
                             <button
@@ -880,18 +905,10 @@ export default function InvoicesPage() {
                 )}
               </div>
 
-              {/* Totals */}
-              <div className="bg-gray-50 rounded-lg p-4 space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-500">Subtotal</span>
-                  <span>{formatCurrency(subtotal)}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-500">Tax (18% VAT)</span>
-                  <span>{formatCurrency(tax_amount)}</span>
-                </div>
-                <div className="flex justify-between font-bold text-lg pt-2 border-t border-gray-200">
-                  <span>Total</span>
+              {/* Totals - NO TAX */}
+              <div className="bg-gray-50 rounded-lg p-4">
+                <div className="flex justify-between font-bold text-lg">
+                  <span>Total Amount</span>
                   <span className="text-brand-600">{formatCurrency(total_amount)}</span>
                 </div>
               </div>
@@ -972,7 +989,7 @@ export default function InvoicesPage() {
                         <p className="font-medium text-gray-900">{product.name}</p>
                         <p className="text-xs text-gray-400">SKU: {product.sku}</p>
                       </div>
-                      <p className="text-brand-600 font-bold">{formatCurrency(product.selling_price)}</p>
+                      <p className="text-brand-600 font-bold">{formatCurrency(parsePrice(product.selling_price))}</p>
                     </div>
                     <p className="text-xs text-gray-500 mt-2">Stock: {product.quantity_on_hand} units</p>
                   </button>
@@ -1022,7 +1039,7 @@ export default function InvoicesPage() {
               </div>
               <div>
                 <p className="text-sm text-gray-500">Balance Due</p>
-                <p className="text-2xl font-bold text-amber-600">{formatCurrency(selectedInvoice.balance_due)}</p>
+                <p className="text-2xl font-bold text-amber-600">{formatCurrency(parsePrice(selectedInvoice.balance_due))}</p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -1055,7 +1072,7 @@ export default function InvoicesPage() {
         </div>
       )}
 
-      {/* Invoice Detail Modal */}
+      {/* Invoice Detail Modal - NO TAX */}
       {showDetailModal && selectedInvoice && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
@@ -1099,12 +1116,12 @@ export default function InvoicesPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {selectedInvoice.items?.map((item, idx) => (
+                    {(selectedInvoice.items || []).map((item, idx) => (
                       <tr key={idx}>
                         <td className="px-4 py-2 text-sm">{item.description}</td>
                         <td className="px-4 py-2 text-center text-sm">{item.quantity}</td>
-                        <td className="px-4 py-2 text-right text-sm">{formatCurrency(item.unit_price)}</td>
-                        <td className="px-4 py-2 text-right text-sm">{formatCurrency(item.total)}</td>
+                        <td className="px-4 py-2 text-right text-sm">{formatCurrency(parsePrice(item.unit_price))}</td>
+                        <td className="px-4 py-2 text-right text-sm">{formatCurrency(parsePrice(item.total))}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -1112,25 +1129,17 @@ export default function InvoicesPage() {
               </div>
 
               <div className="bg-gray-50 rounded-lg p-4 space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span>Subtotal</span>
-                  <span>{formatCurrency(selectedInvoice.subtotal)}</span>
+                <div className="flex justify-between font-bold text-lg">
+                  <span>Total Amount</span>
+                  <span className="text-brand-600">{formatCurrency(parsePrice(selectedInvoice.total_amount))}</span>
                 </div>
-                <div className="flex justify-between text-sm">
-                  <span>Tax (18% VAT)</span>
-                  <span>{formatCurrency(selectedInvoice.tax_amount)}</span>
-                </div>
-                <div className="flex justify-between font-bold text-lg pt-2 border-t border-gray-200">
-                  <span>Total</span>
-                  <span className="text-brand-600">{formatCurrency(selectedInvoice.total_amount)}</span>
-                </div>
-                <div className="flex justify-between text-sm">
+                <div className="flex justify-between text-sm pt-2 border-t border-gray-200">
                   <span>Amount Paid</span>
-                  <span className="text-green-600">{formatCurrency(selectedInvoice.amount_paid)}</span>
+                  <span className="text-green-600">{formatCurrency(parsePrice(selectedInvoice.amount_paid))}</span>
                 </div>
-                <div className="flex justify-between font-semibold pt-2">
+                <div className="flex justify-between font-semibold">
                   <span>Balance Due</span>
-                  <span className="text-amber-600">{formatCurrency(selectedInvoice.balance_due)}</span>
+                  <span className="text-amber-600">{formatCurrency(parsePrice(selectedInvoice.balance_due))}</span>
                 </div>
               </div>
 

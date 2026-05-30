@@ -1,4 +1,4 @@
-// app/(dashboard)/sales/pos/page.tsx - COMPLETE WITH BARCODE SCANNING
+// app/(dashboard)/sales/pos/page.tsx - WITH PROPER CHANGE/TIP HANDLING
 
 'use client';
 
@@ -6,6 +6,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useAuthStore } from '@/store/authStore';
 import { inventoryApi, salesApi } from '@/services/api';
 import toast from 'react-hot-toast';
+import { Html5QrcodeScanner } from 'html5-qrcode';
 import {
   FiSearch,
   FiPlus,
@@ -22,6 +23,9 @@ import {
   FiPackage,
   FiUsers,
   FiCamera,
+  FiRefreshCw,
+  FiRotateCcw,
+  FiAlertCircle,
 } from 'react-icons/fi';
 
 interface Product {
@@ -29,8 +33,10 @@ interface Product {
   name: string;
   sku: string;
   barcode: string;
-  selling_price: number;
+  selling_price: number | string;
   quantity_on_hand: number;
+  buying_price?: number;
+  category_name?: string;
 }
 
 interface Customer {
@@ -51,6 +57,7 @@ interface CartItem {
   quantity: number;
   stock: number;
   total: number;
+  barcode?: string;
 }
 
 export default function POSPage() {
@@ -71,14 +78,60 @@ export default function POSPage() {
   const [lastSale, setLastSale] = useState<any>(null);
   const [showCustomerModal, setShowCustomerModal] = useState(false);
   const [quickAmounts] = useState([5000, 10000, 20000, 50000, 100000]);
-  const [returnChange, setReturnChange] = useState(true);
-  const [isScanning, setIsScanning] = useState(false);
+  
+  // Overpayment options: 'return' or 'tip'
+  const [overpaymentAction, setOverpaymentAction] = useState<'return' | 'tip'>('return');
+  
+  // Barcode scanning states
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [barcodeInput, setBarcodeInput] = useState('');
-  const barcodeInputRef = useRef<HTMLInputElement>(null);
+  const [isScanning, setIsScanning] = useState(false);
+  const [useFrontCamera, setUseFrontCamera] = useState(true);
+  const [isSwitchingCamera, setIsSwitchingCamera] = useState(false);
+  const [cameraPermission, setCameraPermission] = useState<boolean | null>(null);
+  const [isRequestingPermission, setIsRequestingPermission] = useState(false);
   
   const cartEndRef = useRef<HTMLDivElement>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const barcodeInputRef = useRef<HTMLInputElement>(null);
+  const scannerRef = useRef<Html5QrcodeScanner | null>(null);
+  const scannerContainerRef = useRef<HTMLDivElement>(null);
+
+  // Helper function to convert price to number
+  const parsePrice = (price: number | string): number => {
+    if (typeof price === 'number') return price;
+    if (typeof price === 'string') {
+      const parsed = parseFloat(price);
+      return isNaN(parsed) ? 0 : parsed;
+    }
+    return 0;
+  };
+
+  // Filter products and customers
+  const filteredProducts = products.filter((product: Product) =>
+    product.name.toLowerCase().includes(searchTerm.toLowerCase()) &&
+    product.quantity_on_hand > 0
+  );
+
+  const filteredCustomers = customers.filter((customer: Customer) =>
+    customer.name.toLowerCase().includes(customerSearchTerm.toLowerCase()) ||
+    customer.phone?.toLowerCase().includes(customerSearchTerm.toLowerCase()) ||
+    customer.email?.toLowerCase().includes(customerSearchTerm.toLowerCase())
+  );
+
+  // Calculate totals
+  const subtotal = cart.reduce((sum, item) => {
+    const itemTotal = typeof item.total === 'number' ? item.total : parseFloat(String(item.total)) || 0;
+    return sum + itemTotal;
+  }, 0);
+  
+  const total = subtotal;
+  const itemCount = cart.reduce((sum, item) => sum + (typeof item.quantity === 'number' ? item.quantity : 0), 0);
+  
+  // Calculate overpayment amount
+  const overpaymentAmount = amountPaid > total ? amountPaid - total : 0;
+  
+  // Final amount to record (amount paid minus tip if keep as tip)
+  const finalAmountPaid = overpaymentAction === 'tip' ? total : amountPaid;
 
   // Fetch products and customers
   useEffect(() => {
@@ -91,10 +144,24 @@ export default function POSPage() {
 
   // Focus barcode input when component loads
   useEffect(() => {
-    if (barcodeInputRef.current) {
+    if (barcodeInputRef.current && !isScannerOpen) {
       barcodeInputRef.current.focus();
     }
-  }, []);
+  }, [isScannerOpen]);
+
+  // Check camera permission when modal opens
+  useEffect(() => {
+    if (isScannerOpen) {
+      checkAndRequestCameraPermission();
+    }
+    
+    return () => {
+      if (scannerRef.current) {
+        scannerRef.current.clear();
+        scannerRef.current = null;
+      }
+    };
+  }, [isScannerOpen]);
 
   const fetchData = async () => {
     setIsLoading(true);
@@ -104,8 +171,15 @@ export default function POSPage() {
         salesApi.getCustomers(),
       ]);
       
-      const productsData = productsRes.data.results || productsRes.data;
-      const customersData = customersRes.data.results || customersRes.data;
+      let productsData = productsRes.data.results || productsRes.data || [];
+      const customersData = customersRes.data.results || customersRes.data || [];
+      
+      // Convert selling_price to number for each product
+      productsData = productsData.map((product: any) => ({
+        ...product,
+        selling_price: parsePrice(product.selling_price),
+        buying_price: parsePrice(product.buying_price || 0)
+      }));
       
       setProducts(productsData);
       setCustomers(customersData);
@@ -117,20 +191,192 @@ export default function POSPage() {
     }
   };
 
-  // Filter products
-  const filteredProducts = products.filter(product =>
-    product.name.toLowerCase().includes(searchTerm.toLowerCase()) &&
-    product.quantity_on_hand > 0
-  );
+  // Check and request camera permission
+  const checkAndRequestCameraPermission = async () => {
+    setIsRequestingPermission(true);
+    
+    try {
+      const permissions = await navigator.permissions.query({ name: 'camera' as PermissionName });
+      
+      if (permissions.state === 'granted') {
+        setCameraPermission(true);
+        initScanner();
+      } else if (permissions.state === 'prompt') {
+        await requestCameraAccess();
+      } else if (permissions.state === 'denied') {
+        setCameraPermission(false);
+        toast.error('Camera permission denied. Please enable camera in browser settings.');
+      }
+      
+      permissions.addEventListener('change', (e) => {
+        if ((e.target as any).state === 'granted') {
+          setCameraPermission(true);
+          initScanner();
+        }
+      });
+      
+    } catch (error) {
+      console.error('Permission check failed:', error);
+      await requestCameraAccess();
+    } finally {
+      setIsRequestingPermission(false);
+    }
+  };
+  
+  const requestCameraAccess = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: useFrontCamera ? "user" : "environment" }
+      });
+      
+      stream.getTracks().forEach(track => track.stop());
+      
+      setCameraPermission(true);
+      initScanner();
+      
+    } catch (error: any) {
+      console.error('Camera access denied:', error);
+      
+      if (error.name === 'NotAllowedError') {
+        setCameraPermission(false);
+        toast.error('Camera permission denied. Please allow camera access and refresh.');
+      } else if (error.name === 'NotFoundError') {
+        setCameraPermission(false);
+        toast.error('No camera found on this device.');
+      } else {
+        setCameraPermission(false);
+        toast.error('Failed to access camera. Please check your camera settings.');
+      }
+    }
+  };
 
-  // Filter customers for modal
-  const filteredCustomers = customers.filter(customer =>
-    customer.name.toLowerCase().includes(customerSearchTerm.toLowerCase()) ||
-    customer.phone?.toLowerCase().includes(customerSearchTerm.toLowerCase()) ||
-    customer.email?.toLowerCase().includes(customerSearchTerm.toLowerCase())
-  );
+  // Initialize scanner
+  const initScanner = () => {
+    if (!scannerContainerRef.current) return;
+    
+    if (scannerRef.current) {
+      scannerRef.current.clear();
+      scannerRef.current = null;
+    }
+    
+    while (scannerContainerRef.current.firstChild) {
+      scannerContainerRef.current.removeChild(scannerContainerRef.current.firstChild);
+    }
+    
+    const facingMode = useFrontCamera ? "user" : "environment";
+    
+    try {
+      scannerRef.current = new Html5QrcodeScanner(
+        "barcode-scanner",
+        {
+          fps: 10,
+          qrbox: { width: 250, height: 250 },
+          aspectRatio: 1.0,
+          rememberLastUsedCamera: true,
+          videoConstraints: {
+            facingMode: { exact: facingMode },
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+          },
+          supportedScanTypes: [],
+        },
+        false
+      );
+      
+      scannerRef.current.render(onScanSuccess, onScanError);
+      
+    } catch (error: any) {
+      console.error('Scanner initialization failed:', error);
+      
+      if (error.message?.includes('facingMode')) {
+        try {
+          scannerRef.current = new Html5QrcodeScanner(
+            "barcode-scanner",
+            {
+              fps: 10,
+              qrbox: { width: 250, height: 250 },
+              aspectRatio: 1.0,
+              rememberLastUsedCamera: true,
+              videoConstraints: {
+                width: { ideal: 1280 },
+                height: { ideal: 720 }
+              },
+              supportedScanTypes: [],
+            },
+            false
+          );
+          
+          scannerRef.current.render(onScanSuccess, onScanError);
+        } catch (fallbackError) {
+          toast.error('Failed to start camera. Please check your camera settings.');
+        }
+      } else {
+        toast.error('Failed to start camera scanner.');
+      }
+    }
+  };
+  
+  // Switch camera
+  const switchCamera = async () => {
+    setIsSwitchingCamera(true);
+    
+    if (scannerRef.current) {
+      scannerRef.current.clear();
+      scannerRef.current = null;
+    }
+    
+    if (scannerContainerRef.current) {
+      while (scannerContainerRef.current.firstChild) {
+        scannerContainerRef.current.removeChild(scannerContainerRef.current.firstChild);
+      }
+    }
+    
+    const newCameraState = !useFrontCamera;
+    setUseFrontCamera(newCameraState);
+    
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: newCameraState ? "user" : "environment" }
+      });
+      stream.getTracks().forEach(track => track.stop());
+      
+      setTimeout(() => {
+        initScanner();
+        setIsSwitchingCamera(false);
+      }, 100);
+      
+    } catch (error) {
+      console.error('Camera switch failed:', error);
+      toast.error('Failed to switch camera. Please check permissions.');
+      setIsSwitchingCamera(false);
+    }
+  };
+  
+  const onScanSuccess = async (decodedText: string, decodedResult: any) => {
+    console.log(`Barcode detected: ${decodedText}`);
+    
+    try {
+      const audio = new Audio('/beep.mp3');
+      audio.play().catch(e => console.log('Audio play failed'));
+    } catch (e) {}
+    
+    setIsScannerOpen(false);
+    setIsScanning(false);
+    
+    await findProductByBarcode(decodedText);
+    
+    if (barcodeInputRef.current) {
+      setTimeout(() => {
+        barcodeInputRef.current?.focus();
+      }, 100);
+    }
+  };
+  
+  const onScanError = (error: any) => {
+    console.warn(`Scan error: ${error}`);
+  };
 
-  // Handle barcode input (manual entry)
+  // Manual barcode input
   const handleBarcodeSubmit = async (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && barcodeInput) {
       e.preventDefault();
@@ -141,87 +387,43 @@ export default function POSPage() {
 
   // Find product by barcode
   const findProductByBarcode = async (barcode: string) => {
-    try {
-      // First check if product exists in current products list
-      const product = products.find(p => p.barcode === barcode);
-      
-      if (product && product.quantity_on_hand > 0) {
-        addToCart(product);
-      } else if (product && product.quantity_on_hand === 0) {
-        toast.error(`${product.name} is out of stock`);
-      } else {
-        // Try to fetch from API if not in local list
+    const product = products.find(p => p.barcode === barcode);
+    
+    if (product && product.quantity_on_hand > 0) {
+      addToCart(product);
+    } else if (product && product.quantity_on_hand === 0) {
+      toast.error(`${product.name} is out of stock`);
+    } else {
+      try {
         const response = await inventoryApi.getProductByBarcode(barcode);
         if (response.data && response.data.quantity_on_hand > 0) {
-          addToCart(response.data);
+          const newProduct = {
+            ...response.data,
+            selling_price: parsePrice(response.data.selling_price)
+          };
+          setProducts(prev => [...prev, newProduct]);
+          addToCart(newProduct);
         } else if (response.data && response.data.quantity_on_hand === 0) {
           toast.error(`${response.data.name} is out of stock`);
         } else {
           toast.error('Product not found');
         }
+      } catch (error) {
+        console.error('Barcode scan failed:', error);
+        toast.error(`Product with barcode "${barcode}" not found`);
       }
-    } catch (error) {
-      console.error('Barcode scan failed:', error);
-      toast.error('Product not found. Please check barcode.');
     }
-  };
-
-  // Camera barcode scanning
-  const startCameraScan = async () => {
-    setIsScanning(true);
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "environment" }
-      });
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        videoRef.current.play();
-      }
-    } catch (error) {
-      console.error('Camera access denied:', error);
-      toast.error('Unable to access camera. Please check permissions.');
-      setIsScanning(false);
-    }
-  };
-
-  const captureAndScan = () => {
-    if (!videoRef.current || !canvasRef.current) return;
-    
-    const video = videoRef.current;
-    const canvas = canvasRef.current;
-    
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    const ctx = canvas.getContext('2d');
-    ctx?.drawImage(video, 0, 0, canvas.width, canvas.height);
-    
-    // Convert canvas to data URL and send to backend for processing
-    const imageData = canvas.toDataURL('image/png');
-    
-    // For now, prompt user to enter barcode manually
-    // In production, you would send to backend for OCR/barcode detection
-    setIsScanning(false);
-    stopCameraStream();
-    
-    const manualBarcode = prompt('Enter barcode number from scanned image:');
-    if (manualBarcode) {
-      findProductByBarcode(manualBarcode);
-    }
-  };
-
-  const stopCameraStream = () => {
-    const stream = videoRef.current?.srcObject as MediaStream;
-    if (stream) {
-      stream.getTracks().forEach(track => track.stop());
-    }
-    if (videoRef.current) {
-      videoRef.current.srcObject = null;
-    }
-    setIsScanning(false);
   };
 
   // Add to cart
   const addToCart = (product: Product) => {
+    const price = parsePrice(product.selling_price);
+    
+    if (price === 0) {
+      toast.error('Invalid product price');
+      return;
+    }
+    
     const existingItem = cart.find(item => item.product_id === product.id);
     
     if (existingItem) {
@@ -231,7 +433,7 @@ export default function POSPage() {
       }
       setCart(cart.map(item =>
         item.product_id === product.id
-          ? { ...item, quantity: item.quantity + 1, total: (item.quantity + 1) * item.price }
+          ? { ...item, quantity: item.quantity + 1, total: (item.quantity + 1) * price }
           : item
       ));
     } else {
@@ -239,10 +441,11 @@ export default function POSPage() {
         id: Date.now(),
         product_id: product.id,
         name: product.name,
-        price: product.selling_price,
+        price: price,
         quantity: 1,
         stock: product.quantity_on_hand,
-        total: product.selling_price
+        total: price,
+        barcode: product.barcode
       }]);
     }
     toast.success(`${product.name} added`, { duration: 1500 });
@@ -276,7 +479,7 @@ export default function POSPage() {
     toast.success('Item removed', { duration: 1500 });
   };
 
-  // Select customer from modal
+  // Select customer
   const selectCustomer = (customer: Customer) => {
     setSelectedCustomerId(customer.id);
     setCustomerName(customer.name);
@@ -285,18 +488,17 @@ export default function POSPage() {
     toast.success(`Customer selected: ${customer.name}`);
   };
 
-  // Clear selected customer
   const clearCustomer = () => {
     setSelectedCustomerId(null);
     setCustomerName('');
     setCustomerPhone('');
   };
 
-  // Calculate totals
-  const subtotal = cart.reduce((sum, item) => sum + item.total, 0);
-  const total = subtotal;
-  const itemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
-  const calculatedChange = returnChange && amountPaid > total ? amountPaid - total : 0;
+  // Set exact amount
+  const setExactAmount = () => {
+    setAmountPaid(total);
+    setOverpaymentAction('return'); // Reset to default
+  };
 
   // Process sale
   const processSale = async () => {
@@ -315,6 +517,21 @@ export default function POSPage() {
     setIsProcessing(true);
     
     try {
+      // Calculate final amount to record
+      let finalAmount = amountPaidValue;
+      let tipAmount = 0;
+      
+      if (amountPaidValue > total) {
+        if (overpaymentAction === 'tip') {
+          // Keep excess as tip, record total only
+          finalAmount = total;
+          tipAmount = amountPaidValue - total;
+        } else {
+          // Return change, record full amount paid
+          finalAmount = amountPaidValue;
+        }
+      }
+      
       const saleData: any = {
         customer_name: customerName || 'Walk-in Customer',
         customer_phone: customerPhone,
@@ -323,10 +540,11 @@ export default function POSPage() {
           quantity: item.quantity
         })),
         payment_method: paymentMethod,
-        amount_paid: amountPaidValue,
+        amount_paid: finalAmount,
         discount_amount: 0,
         discount_percentage: 0,
-        notes: returnChange ? `Change returned: TZS ${calculatedChange}` : 'No change returned'
+        notes: tipAmount > 0 ? `Tip included: TZS ${tipAmount.toLocaleString()}` : '',
+        tip_amount: tipAmount
       };
       
       if (selectedCustomerId) {
@@ -334,18 +552,24 @@ export default function POSPage() {
       }
 
       const response = await salesApi.processSale(saleData);
+      
+      // Store receipt data
       setLastSale({
         ...response.data,
-        actualAmountPaid: amountPaidValue,
-        changeReturned: calculatedChange,
-        returnedChange: returnChange
+        amountPaidEntered: amountPaidValue,
+        actualAmountPaid: finalAmount,
+        overpaymentAmount: overpaymentAmount,
+        overpaymentAction: overpaymentAction,
+        tipAmount: tipAmount,
+        total: total
       });
       
       toast.success(`Sale completed! Invoice: ${response.data.sale.invoice_number}`);
       
+      // Reset form
       setCart([]);
       setAmountPaid(0);
-      setReturnChange(true);
+      setOverpaymentAction('return');
       fetchData();
       setShowReceipt(true);
       
@@ -368,10 +592,10 @@ export default function POSPage() {
 
   const quickAddAmount = (amount: number) => {
     setAmountPaid(prev => prev + amount);
-  };
-
-  const setExactAmount = () => {
-    setAmountPaid(total);
+    // Reset overpayment action when amount changes
+    if ((amountPaid + amount) > total) {
+      setOverpaymentAction('return');
+    }
   };
 
   const handleAmountPaidChange = (value: string) => {
@@ -380,6 +604,10 @@ export default function POSPage() {
       setAmountPaid(0);
     } else {
       setAmountPaid(numValue);
+    }
+    // Reset overpayment action when amount changes
+    if (numValue > total) {
+      setOverpaymentAction('return');
     }
   };
 
@@ -450,12 +678,12 @@ export default function POSPage() {
           <tbody>
             ${sale.items?.map((item: any) => `
               <tr>
-                <td>${item.product_name}</td>
-                <td>${item.quantity}</td>
+                <td>${item.product_name}</span></td>
+                <td>${item.quantity}</span></td>
                 <td>${formatCurrencyPrint(item.unit_price)}</span></td>
                 <td>${formatCurrencyPrint(item.total_price)}</span></td>
               </tr>
-            `).join('') || '<tr><td colspan="4">No items</td</td>'}
+            `).join('') || '<tr><td colspan="4">No items</td></table>'}
           </tbody>
         </table>
         
@@ -464,10 +692,10 @@ export default function POSPage() {
         <div class="totals">
           <div class="info-row"><span>Subtotal:</span><span>${formatCurrencyPrint(sale.subtotal)}</span></div>
           ${sale.discount_amount > 0 ? `<div class="info-row"><span>Discount:</span><span>-${formatCurrencyPrint(sale.discount_amount)}</span></div>` : ''}
-          <div class="total-row"><span>TOTAL:</span><span>${formatCurrencyPrint(sale.total_amount)}</span></div>
+          <div class="total-row"><span>TOTAL:</span><span>${formatCurrencyPrint(lastSale.total)}</span></div>
           <div class="info-row"><span>Payment Method:</span><span class="capitalize">${sale.payment_method}</span></div>
           <div class="info-row"><span>Amount Paid:</span><span>${formatCurrencyPrint(lastSale.actualAmountPaid)}</span></div>
-          ${lastSale.changeReturned > 0 ? `<div class="info-row"><span>Change:</span><span>${formatCurrencyPrint(lastSale.changeReturned)}</span></div>` : ''}
+          ${lastSale.tipAmount > 0 ? `<div class="info-row"><span>Tip:</span><span>${formatCurrencyPrint(lastSale.tipAmount)}</span></div>` : ''}
         </div>
         
         <div class="footer">
@@ -500,114 +728,112 @@ export default function POSPage() {
   return (
     <div className="p-4 md:p-6 max-w-[1600px] mx-auto">
       {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Point of Sale</h1>
-        <p className="text-sm text-gray-500 mt-1">Process customer orders quickly and efficiently</p>
-      </div>
-
-      {/* Barcode Scanner Row */}
-      <div className="mb-4 flex gap-3">
-        <div className="flex-1 relative">
-          <FiSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input
-            ref={barcodeInputRef}
-            type="text"
-            placeholder="Scan or enter barcode here..."
-            value={barcodeInput}
-            onChange={(e) => setBarcodeInput(e.target.value)}
-            onKeyPress={handleBarcodeSubmit}
-            className="w-full pl-11 pr-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 font-mono text-lg"
-          />
+      <div className="mb-6 flex justify-between items-center">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Point of Sale</h1>
+          <p className="text-sm text-gray-500 mt-1">Scan barcode or search products</p>
         </div>
         <button
-          onClick={startCameraScan}
-          className="px-5 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition flex items-center gap-2"
+          onClick={() => fetchData()}
+          className="p-2 text-gray-500 hover:text-brand-600 rounded-lg border border-gray-200"
         >
-          <FiCamera size={20} />
-          Scan Camera
+          <FiRefreshCw size={18} />
         </button>
       </div>
 
-      {/* Products Section */}
-      <div className="space-y-4 mb-6">
-        {/* Search Bar */}
-        <div className="relative">
-          <FiSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input
-            type="text"
-            placeholder="Search products by name..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-11 pr-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500"
-          />
+      {/* Barcode Scanner Row */}
+      <div className="mb-6 bg-gradient-to-r from-brand-50 to-white rounded-2xl p-4 border border-brand-100">
+        <div className="flex flex-col md:flex-row gap-4">
+          <div className="flex-1 relative">
+            <FiSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              ref={barcodeInputRef}
+              type="text"
+              placeholder="Enter barcode manually and press Enter..."
+              value={barcodeInput}
+              onChange={(e) => setBarcodeInput(e.target.value)}
+              onKeyPress={handleBarcodeSubmit}
+              className="w-full pl-11 pr-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 font-mono text-lg"
+            />
+          </div>
+          <button
+            onClick={() => setIsScannerOpen(true)}
+            className="px-6 py-3 bg-brand-600 text-white rounded-xl hover:bg-brand-700 transition flex items-center justify-center gap-2 font-medium shadow-md"
+          >
+            <FiCamera size={20} />
+            Scan Barcode with Camera
+          </button>
         </div>
+      </div>
 
-        {/* Stats Bar */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="bg-white rounded-xl p-4 border border-gray-100 shadow-sm">
-            <p className="text-xs text-gray-500">Total Products</p>
-            <p className="text-2xl font-bold text-gray-900">{products.length}</p>
-          </div>
-          <div className="bg-white rounded-xl p-4 border border-gray-100 shadow-sm">
-            <p className="text-xs text-gray-500">Items in Cart</p>
-            <p className="text-2xl font-bold text-brand-600">{itemCount}</p>
-          </div>
-          <div className="bg-white rounded-xl p-4 border border-gray-100 shadow-sm">
-            <p className="text-xs text-gray-500">Subtotal</p>
-            <p className="text-2xl font-bold text-gray-900">TZS {subtotal.toLocaleString()}</p>
-          </div>
-          <div className="bg-white rounded-xl p-4 border border-gray-100 shadow-sm">
-            <p className="text-xs text-gray-500">Total</p>
-            <p className="text-2xl font-bold text-green-600">TZS {total.toLocaleString()}</p>
+      {/* Stats Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <div className="bg-white rounded-xl p-4 border border-gray-100 shadow-sm">
+          <p className="text-xs text-gray-500">Total Products</p>
+          <p className="text-2xl font-bold text-gray-900">{products.length}</p>
+        </div>
+        <div className="bg-white rounded-xl p-4 border border-gray-100 shadow-sm">
+          <p className="text-xs text-gray-500">Items in Cart</p>
+          <p className="text-2xl font-bold text-brand-600">{itemCount}</p>
+        </div>
+        <div className="bg-white rounded-xl p-4 border border-gray-100 shadow-sm">
+          <p className="text-xs text-gray-500">Subtotal</p>
+          <p className="text-2xl font-bold text-gray-900">TZS {subtotal.toLocaleString()}</p>
+        </div>
+        <div className="bg-white rounded-xl p-4 border border-gray-100 shadow-sm">
+          <p className="text-xs text-gray-500">Total</p>
+          <p className="text-2xl font-bold text-green-600">TZS {total.toLocaleString()}</p>
+        </div>
+      </div>
+
+      {/* Products Grid */}
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden mb-6">
+        <div className="p-4 border-b border-gray-200 bg-gray-50">
+          <div className="relative">
+            <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Search products by name..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
+            />
           </div>
         </div>
-
-        {/* Products Grid */}
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <div className="p-4 border-b border-gray-200 bg-gray-50">
-            <h2 className="font-semibold text-gray-900">Products</h2>
-          </div>
-          <div className="p-4 max-h-[450px] overflow-y-auto">
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-              {filteredProducts.map((product) => (
-                <button
-                  key={product.id}
-                  onClick={() => addToCart(product)}
-                  disabled={product.quantity_on_hand === 0}
-                  className="group bg-white border border-gray-200 rounded-xl p-3 text-left hover:shadow-lg hover:border-brand-200 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <div className="flex justify-between items-start mb-2">
-                    <div className="w-10 h-10 bg-brand-100 rounded-lg flex items-center justify-center group-hover:bg-brand-500 transition">
-                      <FiPackage className="text-brand-600 group-hover:text-white" size={18} />
-                    </div>
-                    {product.quantity_on_hand <= 5 && (
-                      <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full">
-                        Low
-                      </span>
-                    )}
+        <div className="p-4 max-h-[400px] overflow-y-auto">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+            {filteredProducts.map((product: Product) => (
+              <button
+                key={product.id}
+                onClick={() => addToCart(product)}
+                disabled={product.quantity_on_hand === 0}
+                className="group bg-white border border-gray-200 rounded-xl p-3 text-left hover:shadow-lg hover:border-brand-200 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <div className="flex justify-between items-start mb-2">
+                  <div className="w-10 h-10 bg-brand-100 rounded-lg flex items-center justify-center group-hover:bg-brand-500 transition">
+                    <FiPackage className="text-brand-600 group-hover:text-white" size={18} />
                   </div>
-                  <h3 className="font-medium text-gray-900 text-sm line-clamp-2">{product.name}</h3>
-                  <p className="text-brand-600 font-bold mt-2">TZS {product.selling_price.toLocaleString()}</p>
-                  <p className="text-xs text-gray-400 mt-1">Stock: {product.quantity_on_hand}</p>
-                  {product.barcode && (
-                    <p className="text-[10px] text-gray-300 mt-1 truncate">barcode: {product.barcode}</p>
+                  {product.quantity_on_hand <= 5 && (
+                    <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full">Low</span>
                   )}
-                </button>
-              ))}
-            </div>
-            {filteredProducts.length === 0 && (
-              <div className="text-center py-12 text-gray-500">
-                <FiPackage className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-                <p>{searchTerm ? 'No products found' : 'No products available'}</p>
-              </div>
-            )}
+                </div>
+                <h3 className="font-medium text-gray-900 text-sm line-clamp-2">{product.name}</h3>
+                <p className="text-brand-600 font-bold mt-2">TZS {parsePrice(product.selling_price).toLocaleString()}</p>
+                <p className="text-xs text-gray-400 mt-1">Stock: {product.quantity_on_hand}</p>
+              </button>
+            ))}
           </div>
+          {filteredProducts.length === 0 && (
+            <div className="text-center py-12 text-gray-500">
+              <FiPackage className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+              <p>{searchTerm ? 'No products found' : 'No products available'}</p>
+            </div>
+          )}
         </div>
       </div>
 
       {/* Shopping Cart Section */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        {/* Cart Header */}
         <div className="p-4 border-b border-gray-200 bg-gradient-to-r from-brand-50 to-white flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
           <div className="flex items-center gap-2">
             <FiShoppingCart className="text-brand-500" size={20} />
@@ -615,22 +841,17 @@ export default function POSPage() {
             <span className="text-xs bg-brand-100 text-brand-700 px-2 py-0.5 rounded-full">{cart.length} items</span>
           </div>
           {cart.length > 0 && (
-            <button
-              onClick={clearCart}
-              className="text-sm text-red-500 hover:text-red-600 flex items-center gap-1"
-            >
-              <FiTrash2 size={14} />
-              Clear Cart
+            <button onClick={clearCart} className="text-sm text-red-500 hover:text-red-600 flex items-center gap-1">
+              <FiTrash2 size={14} /> Clear Cart
             </button>
           )}
         </div>
 
-        {/* Cart Items Table */}
         {cart.length === 0 ? (
           <div className="text-center py-16 text-gray-400">
             <FiShoppingCart className="w-16 h-16 mx-auto mb-4 opacity-30" />
             <p className="text-lg font-medium">Cart is empty</p>
-            <p className="text-sm mt-1">Scan or search products above to add items</p>
+            <p className="text-sm mt-1">Scan barcode or search products to add items</p>
           </div>
         ) : (
           <>
@@ -646,40 +867,26 @@ export default function POSPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {cart.map((item) => (
+                  {cart.map((item: CartItem) => (
                     <tr key={item.id} className="hover:bg-gray-50 transition">
                       <td className="px-4 py-3">
                         <p className="font-medium text-gray-900">{item.name}</p>
-                        <p className="text-xs text-gray-400">TZS {item.price.toLocaleString()}</p>
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-center gap-2">
-                          <button
-                            onClick={() => updateQuantity(item.id, item.quantity - 1)}
-                            className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center hover:bg-gray-200 transition"
-                          >
+                          <button onClick={() => updateQuantity(item.id, item.quantity - 1)} className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center hover:bg-gray-200 transition">
                             <FiMinus size={12} />
                           </button>
                           <span className="w-8 text-center font-medium">{item.quantity}</span>
-                          <button
-                            onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                            className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center hover:bg-gray-200 transition"
-                          >
+                          <button onClick={() => updateQuantity(item.id, item.quantity + 1)} className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center hover:bg-gray-200 transition">
                             <FiPlus size={12} />
                           </button>
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-right">
-                        <span className="text-gray-600">TZS {item.price.toLocaleString()}</span>
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <span className="font-semibold text-gray-900">TZS {item.total.toLocaleString()}</span>
-                      </td>
+                      <td className="px-4 py-3 text-right">TZS {item.price.toLocaleString()}</td>
+                      <td className="px-4 py-3 text-right font-semibold">TZS {item.total.toLocaleString()}</td>
                       <td className="px-4 py-3 text-center">
-                        <button
-                          onClick={() => removeFromCart(item.id)}
-                          className="text-red-400 hover:text-red-600 transition"
-                        >
+                        <button onClick={() => removeFromCart(item.id)} className="text-red-400 hover:text-red-600 transition">
                           <FiTrash2 size={16} />
                         </button>
                       </td>
@@ -694,58 +901,38 @@ export default function POSPage() {
 
         {/* Checkout Section */}
         {cart.length > 0 && (
-          <div className="border-t border-gray-200 bg-gray-50">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 p-6">
+          <div className="border-t border-gray-200 bg-gray-50 p-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Left Side - Customer Info & Payment */}
               <div className="space-y-4">
                 <div>
-                  <div className="flex items-center justify-between mb-3">
-                    <h3 className="font-medium text-gray-900 flex items-center gap-2">
-                      <FiUser size={16} />
-                      Customer Information
-                    </h3>
-                    <button
-                      onClick={() => setShowCustomerModal(true)}
-                      className="text-sm text-brand-600 hover:text-brand-700 flex items-center gap-1"
-                    >
-                      <FiUsers size={14} />
-                      Select Customer
-                    </button>
+                  <div className="flex justify-between mb-3">
+                    <h3 className="font-medium">Customer Information</h3>
+                    <button onClick={() => setShowCustomerModal(true)} className="text-sm text-brand-600">Select Customer</button>
                   </div>
-                  <div className="space-y-3">
-                    <input
-                      type="text"
-                      placeholder="Customer name"
-                      value={customerName}
-                      onChange={(e) => setCustomerName(e.target.value)}
-                      className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
-                    />
-                    <input
-                      type="tel"
-                      placeholder="Phone number"
-                      value={customerPhone}
-                      onChange={(e) => setCustomerPhone(e.target.value)}
-                      className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
-                    />
-                    {selectedCustomerId && (
-                      <div className="flex items-center justify-between p-2 bg-green-50 rounded-lg">
-                        <span className="text-sm text-green-700">Customer selected</span>
-                        <button
-                          onClick={clearCustomer}
-                          className="text-xs text-red-500 hover:text-red-600"
-                        >
-                          Clear
-                        </button>
-                      </div>
-                    )}
-                  </div>
+                  <input 
+                    type="text" 
+                    placeholder="Customer name" 
+                    value={customerName} 
+                    onChange={(e) => setCustomerName(e.target.value)} 
+                    className="w-full p-2 border rounded-lg mb-2" 
+                  />
+                  <input 
+                    type="tel" 
+                    placeholder="Phone number" 
+                    value={customerPhone} 
+                    onChange={(e) => setCustomerPhone(e.target.value)} 
+                    className="w-full p-2 border rounded-lg" 
+                  />
+                  {selectedCustomerId && (
+                    <div className="mt-2 text-sm text-green-600 flex justify-between items-center">
+                      <span>✓ Customer selected</span>
+                      <button onClick={clearCustomer} className="text-red-500 text-xs">Clear</button>
+                    </div>
+                  )}
                 </div>
-
                 <div>
-                  <h3 className="font-medium text-gray-900 mb-3 flex items-center gap-2">
-                    <FiCreditCard size={16} />
-                    Payment Method
-                  </h3>
+                  <h3 className="font-medium mb-3">Payment Method</h3>
                   <div className="grid grid-cols-3 gap-2">
                     {[
                       { value: 'cash', label: 'Cash', icon: FiDollarSign },
@@ -755,42 +942,39 @@ export default function POSPage() {
                       <button
                         key={method.value}
                         onClick={() => setPaymentMethod(method.value)}
-                        className={`flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg border transition ${
+                        className={`flex items-center justify-center gap-2 p-2 rounded-lg border transition ${
                           paymentMethod === method.value
                             ? 'border-brand-500 bg-brand-50 text-brand-600'
-                            : 'border-gray-200 text-gray-600 hover:bg-gray-100'
+                            : 'border-gray-200 hover:bg-gray-100'
                         }`}
                       >
                         <method.icon size={14} />
-                        <span className="text-sm">{method.label}</span>
+                        {method.label}
                       </button>
                     ))}
                   </div>
                 </div>
               </div>
 
-              {/* Right Side - Totals & Payment */}
+              {/* Right Side - Payment */}
               <div className="space-y-4">
-                <div>
-                  <h3 className="font-medium text-gray-900 mb-3">Order Summary</h3>
-                  <div className="space-y-2 bg-white rounded-lg p-4 border border-gray-200">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-500">Subtotal ({itemCount} items)</span>
-                      <span className="font-medium">TZS {subtotal.toLocaleString()}</span>
-                    </div>
-                    <div className="flex justify-between text-lg font-bold pt-2 border-t border-gray-200">
-                      <span>Total</span>
-                      <span className="text-brand-600">TZS {total.toLocaleString()}</span>
-                    </div>
+                <div className="bg-white p-4 rounded-lg border">
+                  <div className="flex justify-between mb-2">
+                    <span className="text-gray-600">Subtotal ({itemCount} items)</span>
+                    <span className="font-medium">TZS {subtotal.toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between text-lg font-bold pt-2 border-t">
+                    <span>Total</span>
+                    <span className="text-brand-600">TZS {total.toLocaleString()}</span>
                   </div>
                 </div>
 
                 <div>
                   <div className="flex items-center justify-between mb-2">
                     <label className="font-medium text-gray-900">Amount Paid</label>
-                    <button
+                    <button 
                       onClick={setExactAmount}
-                      className="text-xs text-brand-600 hover:text-brand-700"
+                      className="px-3 py-1 text-sm bg-brand-100 text-brand-600 rounded-lg hover:bg-brand-200 transition"
                     >
                       Exact Amount
                     </button>
@@ -811,227 +995,196 @@ export default function POSPage() {
                     placeholder="Enter amount"
                     value={amountPaid || ''}
                     onChange={(e) => handleAmountPaidChange(e.target.value)}
-                    className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 text-lg"
+                    className="w-full p-3 border rounded-lg text-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
                   />
                   
-                  {amountPaid > total && (
+                  {/* Overpayment Options */}
+                  {overpaymentAmount > 0 && (
                     <div className="mt-4 p-4 bg-yellow-50 rounded-lg border border-yellow-200">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-sm font-medium text-yellow-800">Customer overpaid by:</span>
-                        <span className="text-lg font-bold text-yellow-800">TZS {(amountPaid - total).toLocaleString()}</span>
-                      </div>
-                      <div className="flex gap-3 mt-3">
+                      <p className="text-sm font-medium text-yellow-800 mb-3">
+                        Customer overpaid by: TZS {overpaymentAmount.toLocaleString()}
+                      </p>
+                      <div className="flex gap-3">
                         <button
-                          onClick={() => setReturnChange(true)}
+                          onClick={() => setOverpaymentAction('return')}
                           className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition ${
-                            returnChange
+                            overpaymentAction === 'return'
                               ? 'bg-brand-500 text-white'
                               : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'
                           }`}
                         >
-                          Return Change
+                          💵 Return Change
                         </button>
                         <button
-                          onClick={() => setReturnChange(false)}
+                          onClick={() => setOverpaymentAction('tip')}
                           className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition ${
-                            !returnChange
+                            overpaymentAction === 'tip'
                               ? 'bg-brand-500 text-white'
                               : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'
                           }`}
                         >
-                          No Change (Keep as tip)
+                          🎁 Keep as Tip
                         </button>
                       </div>
-                    </div>
-                  )}
-
-                  {calculatedChange > 0 && returnChange && (
-                    <div className="mt-4 p-4 bg-green-50 rounded-lg border border-green-200">
-                      <p className="text-sm text-green-700">Change to return</p>
-                      <p className="text-2xl font-bold text-green-600">TZS {calculatedChange.toLocaleString()}</p>
+                      {overpaymentAction === 'return' && (
+                        <p className="text-xs text-gray-600 mt-3">
+                          Change to return: TZS {overpaymentAmount.toLocaleString()}
+                        </p>
+                      )}
+                      {overpaymentAction === 'tip' && (
+                        <p className="text-xs text-gray-600 mt-3">
+                          Tip amount: TZS {overpaymentAmount.toLocaleString()}
+                        </p>
+                      )}
                     </div>
                   )}
                   
+                  {/* Short payment warning */}
                   {amountPaid > 0 && amountPaid < total && paymentMethod !== 'credit' && (
-                    <div className="mt-4 p-4 bg-red-50 rounded-lg border border-red-200">
-                      <p className="text-sm text-red-700">Amount short by</p>
-                      <p className="text-xl font-bold text-red-600">TZS {(total - amountPaid).toLocaleString()}</p>
+                    <div className="mt-4 p-3 bg-red-50 rounded-lg border border-red-200">
+                      <p className="text-sm text-red-700">
+                        Amount short by: TZS {(total - amountPaid).toLocaleString()}
+                      </p>
                     </div>
                   )}
-                </div>
 
-                <button
-                  onClick={processSale}
-                  disabled={(amountPaid < total && paymentMethod !== 'credit') || isProcessing}
-                  className="w-full bg-brand-500 text-white py-3 rounded-lg font-semibold hover:bg-brand-600 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                >
-                  {isProcessing ? (
-                    <>
-                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                      Processing...
-                    </>
-                  ) : (
-                    <>
-                      <FiCheck size={18} />
-                      Complete Sale
-                    </>
-                  )}
-                </button>
+                  <button
+                    onClick={processSale}
+                    disabled={isProcessing || (amountPaid < total && paymentMethod !== 'credit')}
+                    className="w-full mt-4 bg-brand-500 text-white p-3 rounded-lg font-semibold hover:bg-brand-600 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                  >
+                    {isProcessing ? 'Processing...' : 'Complete Sale'}
+                  </button>
+                </div>
               </div>
             </div>
           </div>
         )}
       </div>
 
+      {/* Barcode Scanner Modal */}
+      {isScannerOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-95 z-50 flex items-center justify-center p-4">
+          <div className="relative w-full max-w-lg bg-black rounded-2xl overflow-hidden">
+            <div className="absolute top-0 left-0 right-0 z-10 p-4 bg-gradient-to-b from-black/70 to-transparent">
+              <div className="flex justify-between items-center text-white">
+                <div>
+                  <h3 className="text-lg font-semibold">Scan Barcode</h3>
+                  <p className="text-xs text-gray-300">Using {useFrontCamera ? 'FRONT' : 'BACK'} camera</p>
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={switchCamera} disabled={isSwitchingCamera} className="p-2 bg-white/20 rounded-full hover:bg-white/30 transition disabled:opacity-50">
+                    {isSwitchingCamera ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <FiRotateCcw size={20} />}
+                  </button>
+                  <button onClick={() => { if(scannerRef.current) scannerRef.current.clear(); setIsScannerOpen(false); }} className="p-2 bg-white/20 rounded-full hover:bg-white/30 transition">
+                    <FiX size={20} />
+                  </button>
+                </div>
+              </div>
+            </div>
+            
+            {cameraPermission === false && !isRequestingPermission && (
+              <div className="w-full min-h-[500px] flex items-center justify-center bg-black">
+                <div className="text-center text-white p-6">
+                  <FiAlertCircle className="w-16 h-16 mx-auto mb-4 text-yellow-500" />
+                  <h3 className="text-xl font-semibold mb-2">Camera Access Required</h3>
+                  <p className="text-gray-300 mb-4">Please allow camera access to scan barcodes</p>
+                  <button onClick={checkAndRequestCameraPermission} className="px-6 py-2 bg-brand-600 rounded-lg hover:bg-brand-700">Allow Camera Access</button>
+                  <button onClick={() => setIsScannerOpen(false)} className="px-6 py-2 ml-3 bg-gray-600 rounded-lg hover:bg-gray-700">Cancel</button>
+                </div>
+              </div>
+            )}
+            
+            {isRequestingPermission && (
+              <div className="w-full min-h-[500px] flex items-center justify-center bg-black">
+                <div className="text-center text-white">
+                  <div className="w-12 h-12 border-4 border-white border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                  <p>Requesting camera permission...</p>
+                </div>
+              </div>
+            )}
+            
+            {cameraPermission === true && (
+              <>
+                <div id="barcode-scanner" ref={scannerContainerRef} className="w-full min-h-[500px] bg-black"></div>
+                <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/70 to-transparent">
+                  <div className="text-center text-white text-sm">
+                    <p>📷 Point camera at product barcode</p>
+                    <p className="text-xs text-gray-300 mt-1">Supports EAN-13, Code 128, UPC-A, QR Code</p>
+                  </div>
+                </div>
+                <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+                  <div className="w-64 h-32 border-2 border-green-500 rounded-lg shadow-lg animate-pulse"></div>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Customer Selection Modal */}
       {showCustomerModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[80vh] flex flex-col">
-            <div className="p-4 border-b border-gray-200 flex justify-between items-center">
+            <div className="p-4 border-b flex justify-between items-center">
               <h3 className="text-lg font-semibold">Select Customer</h3>
-              <button
-                onClick={() => setShowCustomerModal(false)}
-                className="p-1 text-gray-400 hover:text-gray-600"
-              >
-                <FiX size={20} />
-              </button>
+              <button onClick={() => setShowCustomerModal(false)} className="p-1"><FiX size={20} /></button>
             </div>
-            
-            <div className="p-4 border-b border-gray-200">
-              <div className="relative">
-                <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                <input
-                  type="text"
-                  placeholder="Search by name, phone or email..."
-                  value={customerSearchTerm}
-                  onChange={(e) => setCustomerSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
-                />
-              </div>
+            <div className="p-4 border-b">
+              <input 
+                type="text" 
+                placeholder="Search by name, phone or email..." 
+                value={customerSearchTerm} 
+                onChange={(e) => setCustomerSearchTerm(e.target.value)} 
+                className="w-full p-2 border rounded-lg" 
+              />
             </div>
-            
             <div className="flex-1 overflow-y-auto p-4">
-              <div className="space-y-2">
-                {filteredCustomers.length === 0 ? (
-                  <div className="text-center py-8 text-gray-500">
-                    <FiUsers className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-                    <p>No customers found</p>
-                  </div>
-                ) : (
-                  filteredCustomers.map((customer) => (
-                    <button
-                      key={customer.id}
-                      onClick={() => selectCustomer(customer)}
-                      className="w-full text-left p-4 border border-gray-200 rounded-xl hover:bg-gray-50 transition flex items-center justify-between"
-                    >
-                      <div>
-                        <p className="font-medium text-gray-900">{customer.name}</p>
-                        {customer.phone && (
-                          <p className="text-sm text-gray-500">{customer.phone}</p>
-                        )}
-                        {customer.email && (
-                          <p className="text-xs text-gray-400">{customer.email}</p>
-                        )}
-                      </div>
-                      <div className="text-right">
-                        <p className="text-sm text-green-600">TZS {(customer.total_spent || 0).toLocaleString()}</p>
-                        <p className="text-xs text-gray-400">{customer.total_visits || 0} visits</p>
-                      </div>
-                    </button>
-                  ))
-                )}
-              </div>
-            </div>
-            
-            <div className="p-4 border-t border-gray-200">
-              <button
-                onClick={() => setShowCustomerModal(false)}
-                className="w-full px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition"
-              >
-                Close
-              </button>
+              {filteredCustomers.map((customer: Customer) => (
+                <button
+                  key={customer.id}
+                  onClick={() => selectCustomer(customer)}
+                  className="w-full text-left p-4 border rounded-xl mb-2 hover:bg-gray-50 transition"
+                >
+                  <p className="font-medium">{customer.name}</p>
+                  <p className="text-sm text-gray-500">{customer.phone}</p>
+                </button>
+              ))}
+              {filteredCustomers.length === 0 && (
+                <div className="text-center py-8 text-gray-500">No customers found</div>
+              )}
             </div>
           </div>
         </div>
       )}
 
-      {/* Camera Scanner Modal */}
-      {isScanning && (
-        <div className="fixed inset-0 bg-black bg-opacity-95 z-50 flex items-center justify-center">
-          <div className="relative w-full max-w-md">
-            <video
-              ref={videoRef}
-              className="w-full rounded-lg"
-              autoPlay
-              playsInline
-            />
-            <canvas ref={canvasRef} className="hidden" />
-            <div className="absolute bottom-8 left-0 right-0 flex justify-center gap-4">
-              <button
-                onClick={captureAndScan}
-                className="px-6 py-3 bg-green-600 text-white rounded-xl font-semibold"
-              >
-                Capture & Scan
-              </button>
-              <button
-                onClick={stopCameraStream}
-                className="px-6 py-3 bg-red-600 text-white rounded-xl font-semibold"
-              >
-                Cancel
-              </button>
-            </div>
-            <div className="absolute top-8 left-0 right-0 text-center text-white">
-              <p>Position barcode in the frame</p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Receipt Modal */}
+      {/* Receipt Modal - Shows only Amount Paid */}
       {showReceipt && lastSale && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 bg-white p-4 border-b border-gray-200 flex justify-between items-center">
-              <h3 className="text-lg font-semibold">Sale Completed!</h3>
-              <button
-                onClick={() => setShowReceipt(false)}
-                className="p-1 text-gray-400 hover:text-gray-600"
-              >
-                <FiX size={20} />
-              </button>
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 text-center">
+            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <FiCheck className="w-8 h-8 text-green-600" />
             </div>
-            
-            <div className="p-6 text-center">
-              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <FiCheck className="w-8 h-8 text-green-600" />
+            <h4 className="text-xl font-bold mb-2">Transaction Successful!</h4>
+            <p className="text-gray-500 mb-4">Invoice: {lastSale.sale.invoice_number}</p>
+            <div className="bg-gray-50 rounded-xl p-4 mb-6">
+              <p className="text-sm text-gray-500">Total Amount</p>
+              <p className="text-2xl font-bold text-brand-600">TZS {lastSale.total.toLocaleString()}</p>
+              <div className="mt-2 pt-2 border-t border-gray-200">
+                <p className="text-sm text-gray-500">Amount Paid</p>
+                <p className="text-lg font-semibold text-green-600">TZS {lastSale.actualAmountPaid.toLocaleString()}</p>
               </div>
-              <h4 className="text-xl font-bold text-gray-900 mb-2">Transaction Successful!</h4>
-              <p className="text-gray-500 mb-4">Invoice: {lastSale.sale.invoice_number}</p>
-              
-              <div className="bg-gray-50 rounded-xl p-4 mb-6 text-left">
-                <p className="text-sm text-gray-500">Total Amount</p>
-                <p className="text-2xl font-bold text-brand-600">TZS {lastSale.sale.total_amount.toLocaleString()}</p>
-                <p className="text-sm text-gray-500 mt-2">Amount Paid: TZS {lastSale.actualAmountPaid.toLocaleString()}</p>
-                {lastSale.changeReturned > 0 && (
-                  <p className="text-sm text-green-600 mt-1">Change Returned: TZS {lastSale.changeReturned.toLocaleString()}</p>
-                )}
-                <p className="text-sm text-gray-500 mt-2">Payment: {lastSale.sale.payment_method}</p>
-                <p className="text-sm text-gray-500">Customer: {lastSale.sale.customer_name || 'Walk-in Customer'}</p>
-              </div>
-              <button
-                onClick={printReceipt}
-                className="w-full border border-gray-200 py-2 rounded-lg flex items-center justify-center gap-2 hover:bg-gray-50 transition"
-              >
-                <FiPrinter size={16} />
-                Print Receipt
-              </button>
-              <button
-                onClick={() => setShowReceipt(false)}
-                className="w-full mt-3 bg-brand-500 text-white py-2 rounded-lg hover:bg-brand-600 transition"
-              >
-                New Sale
-              </button>
+              {lastSale.tipAmount > 0 && (
+                <p className="text-sm text-gray-500 mt-1">Tip: TZS {lastSale.tipAmount.toLocaleString()}</p>
+              )}
             </div>
+            <button onClick={printReceipt} className="w-full border p-2 rounded-lg mb-2 hover:bg-gray-50 transition">
+              <FiPrinter className="inline mr-2" size={16} />
+              Print Receipt
+            </button>
+            <button onClick={() => setShowReceipt(false)} className="w-full bg-brand-500 text-white p-2 rounded-lg hover:bg-brand-600 transition">
+              New Sale
+            </button>
           </div>
         </div>
       )}

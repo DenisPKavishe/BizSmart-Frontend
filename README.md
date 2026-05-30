@@ -29,24 +29,40 @@ This project uses [`next/font`](https://nextjs.org/docs/app/building-your-applic
 python manage.py runserver 0.0.0.0:8000
 
 
-curl -X POST 'http://localhost:8000/api/v1/inventory/purchase-orders/' \
-  -H 'Content-Type: application/json' \
-  -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzc5NzE2MjQyLCJpYXQiOjE3Nzk3MTUzNDIsImp0aSI6IjVmYzk4MGE0OGUwNTQxZGY4ZTBlNDdkYTFiOGUwNDIxIiwidXNlcl9pZCI6MX0.pkjr3iwgSNIHmTgBbXOC5HdQPKJQdLbfseeOuQHUzbs' \
-  -d '{
-    "supplier": 1,
-    "business": 1,
-    "created_by": 1,
-    "status": "draft",
-    "expected_delivery": "2026-05-30",
-    "notes": "Test order",
-    "subtotal": "250.00",
-    "tax_amount": "45.00",
-    "total_amount": "295.00",
-    "items": [
-      {
-        "product": 1,
-        "quantity": 5,
-        "unit_cost": "50.00"
-      }
-    ]
-  }'
+curl -X POST http://127.0.0.1:8000/api/v1/financials/budgets/ \
+-H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzgwMTQzNjA2LCJpYXQiOjE3ODAxNDI3MDYsImp0aSI6IjA3ZDJkNDBkYzAyNTQwYTFhMWFiMzgwMjFhNjZiM2VhIiwidXNlcl9pZCI6MX0.ohYZR_IHRHunfLckd-Ha--RRDogTuzut9JaZxiHkDn0" \
+-H "Content-Type: application/json" \
+-d '{
+  "name": "July 2026 Budget",
+  "period": "monthly",
+  "year": 2026,
+  "month": 7,
+  "status": "draft",
+  "notes": "July Budget",
+  "items": [
+    {
+      "category": "sales",
+      "category_name": "Sales Revenue",
+      "type": "income",
+      "planned_amount": 1500000
+    },
+    {
+      "category": "service",
+      "category_name": "Service Revenue",
+      "type": "income",
+      "planned_amount": 500000
+    },
+    {
+      "category": "salary",
+      "category_name": "Employee Salaries",
+      "type": "expense",
+      "planned_amount": 300000
+    },
+    {
+      "category": "rent",
+      "category_name": "Office Rent",
+      "type": "expense",
+      "planned_amount": 150000
+    }
+  ]
+}'
