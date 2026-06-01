@@ -135,11 +135,11 @@ function ViewMovementModal({ isOpen, onClose, movement }: any) {
               <div className="grid grid-cols-2 gap-4 bg-gray-50 p-4 rounded-lg">
                 <div>
                   <p className="text-xs text-gray-500">Unit Cost</p>
-                  <p className="text-sm text-gray-900">${parseFloat(movement.unit_cost).toFixed(2)}</p>
+                  <p className="text-sm text-gray-900">TZS{parseFloat(movement.unit_cost).toFixed(2)}</p>
                 </div>
                 <div>
                   <p className="text-xs text-gray-500">Total Cost</p>
-                  <p className="text-sm text-gray-900">${parseFloat(movement.total_cost).toFixed(2)}</p>
+                  <p className="text-sm text-gray-900">TZS{parseFloat(movement.total_cost).toFixed(2)}</p>
                 </div>
               </div>
             </div>
@@ -363,7 +363,7 @@ export default function StockMovementsPage() {
             <div>
               <p className="text-xs text-gray-500">Total Value</p>
               <p className="text-2xl font-bold text-purple-600">
-                ${stats.totalValue.toFixed(0)}
+                TZS{stats.totalValue.toFixed(0)}
               </p>
             </div>
             <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
@@ -486,10 +486,10 @@ export default function StockMovementsPage() {
                       </span>
                     </td>
                     <td className="px-6 py-4 text-right text-sm text-gray-600">
-                      {movement.unit_cost ? `$${parseFloat(movement.unit_cost).toFixed(2)}` : 'N/A'}
+                      {movement.unit_cost ? `TZS${parseFloat(movement.unit_cost).toFixed(2)}` : 'N/A'}
                     </td>
                     <td className="px-6 py-4 text-right text-sm font-medium text-gray-900">
-                      {movement.total_cost ? `$${parseFloat(movement.total_cost).toFixed(2)}` : 'N/A'}
+                      {movement.total_cost ? `TZS${parseFloat(movement.total_cost).toFixed(2)}` : 'N/A'}
                     </td>
                     <td className="px-6 py-4">
                       {movement.reference_id ? (
