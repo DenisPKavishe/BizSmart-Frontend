@@ -36,38 +36,98 @@ export const authApi = {
 
 // ==================== DASHBOARD & BI ====================
 export const biApi = {
-  getDashboard: () => 
-    api.get('/bi/dashboard/'),
+  // Main Dashboard
+  getMainDashboard: (params?: { month?: string }) => 
+    api.get('/bi/dashboard/', { params }),
   
-  getTrends: (days: number = 30) => 
-    api.get(`/bi/trends/?days=${days}`),
+  getDashboardTrends: (params?: { days?: number }) => 
+    api.get('/bi/dashboard/trends/', { params }),
   
-  getTopProducts: (limit: number = 10) => 
-    api.get(`/bi/top-products/?limit=${limit}`),
+  getDashboardAlerts: () => 
+    api.get('/bi/dashboard/alerts/'),
   
-  getSlowProducts: (days: number = 30) => 
-    api.get(`/bi/slow-products/?days=${days}`),
+  getDashboardMilestones: () => 
+    api.get('/bi/dashboard/milestones/'),
   
+  getAvailableMonths: () => 
+    api.get('/bi/dashboard/available-months/'),
+  
+  // KPI & Trends
+  getKPIDashboard: () => 
+    api.get('/bi/kpi/'),
+  
+  getTrends: (params?: { days?: number }) => 
+    api.get('/bi/trends/', { params }),
+  
+  // Sales Analytics
+  getTopProducts: (params?: { limit?: number }) => 
+    api.get('/bi/sales/top-products/', { params }),
+  
+  getSalesPerformance: (params?: { period?: string }) => 
+    api.get('/bi/sales/performance/', { params }),
+  
+  getSalesForecast: (params?: { days?: number }) => 
+    api.get('/bi/sales/forecast/', { params }),
+  
+  // Inventory Analytics
+  getInventoryAnalytics: () => 
+    api.get('/bi/inventory/analytics/'),
+  
+  getSlowMovingProducts: (params?: { days?: number }) => 
+    api.get('/bi/inventory/slow-moving/', { params }),
+  
+  // Customer Analytics
   getCustomerInsights: () => 
-    api.get('/bi/customer-insights/'),
+    api.get('/bi/customer/insights/'),
   
-  getForecast: (days: number = 30) => 
-    api.get(`/bi/forecast/?days=${days}`),
+  // Financial Analytics
+  getFinancialSummary: () => 
+    api.get('/bi/financial/summary/'),
   
+  getProfitLoss: (params?: { days?: number }) => 
+    api.get('/bi/financial/profit-loss/', { params }),
+  
+  // HR Analytics
+  getHRAnalytics: () => 
+    api.get('/bi/hr/analytics/'),
+  
+  // Insights
   getInsights: () => 
     api.get('/bi/insights/'),
   
-  getProfitLoss: (startDate?: string, endDate?: string) => 
-    api.get('/bi/profit-loss/', { params: { start_date: startDate, end_date: endDate } }),
+  markInsightRead: (id: number) => 
+    api.post(`/bi/insights/${id}/mark-read/`),
   
+  // Goals
+  getGoals: () => 
+    api.get('/bi/goals/'),
+  
+  createGoal: (data: any) => 
+    api.post('/bi/goals/', data),
+  
+  updateGoal: (id: number, data: any) => 
+    api.patch(`/bi/goals/${id}/`, data),
+  
+  deleteGoal: (id: number) => 
+    api.delete(`/bi/goals/${id}/`),
+  
+  // Widgets
+  getDashboardWidgets: (userId?: number) => 
+    api.get('/bi/widgets/', { params: { user_id: userId } }),
+  
+  createDashboardWidget: (data: any) => 
+    api.post('/bi/widgets/', data),
+  
+  reorderWidgets: (widgetIds: number[]) => 
+    api.post('/bi/widgets/reorder/', { widget_ids: widgetIds }),
+  
+  // Executive Dashboard
   getExecutiveDashboard: () => 
     api.get('/bi/executive/'),
   
-  getMonthOverMonth: () => 
-    api.get('/bi/trends/'),
-
-  getYearOverYear: () => 
-    api.get('/bi/trends/', { params: { days: 730 } }),  
+  // Cache
+  clearBICache: () => 
+    api.post('/bi/clear-cache/'),
 };
 
 // ==================== FINANCIALS ====================
@@ -207,9 +267,7 @@ export const inventoryApi = {
   
   stockOut: (productId: number, quantity: number, reason?: string, notes?: string) => 
     api.post('/inventory/stock/out/', { product_id: productId, quantity, reason, notes }),
-  
-  getStockMovements: () => 
-    api.get('/inventory/stock/movements/'),
+
   
   // Purchase Orders
   getPurchaseOrders: () => api.get('/inventory/purchase-orders/'),
@@ -230,6 +288,17 @@ export const inventoryApi = {
 
   getProductByBarcode: (barcode: string) => 
     api.get(`/inventory/products/barcode/${barcode}/`),  
+
+  getSlowMovingProducts: () => 
+    api.get('/bi/inventory/slow-moving/'),
+  
+  // Get stock movements with filters
+  getStockMovements: (params?: { start_date?: string; end_date?: string; page_size?: number }) => 
+     api.get('/inventory/stock/movements/', { params }),
+  
+  // Get top products with date filter
+  getTopProductsWithDate: (params?: { limit?: number; start_date?: string; end_date?: string }) => 
+    api.get('/bi/sales/top-products/', { params }),  
 };  
 
 // ==================== SALES ====================

@@ -1,8 +1,8 @@
-// app/(dashboard)/bi/financial/page.tsx - COMPLETE WORKING VERSION WITH BUDGET INTEGRATION
+// app/(dashboard)/bi/financial/page.tsx - COMPLETE WORKING VERSION
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAuthStore } from '@/store/authStore';
 import { biApi, financialsApi, hrApi, salesApi } from '@/services/api';
 import toast from 'react-hot-toast';
@@ -27,30 +27,27 @@ import {
   FiActivity,
   FiTarget,
   FiHome,
-  FiCreditCard,
   FiUser,
   FiShoppingBag,
   FiAward,
-  FiCalendar,
 } from 'react-icons/fi';
 import { FaHandHoldingUsd, FaMoneyBillWave, FaChartLine, FaUserGraduate, FaWallet } from 'react-icons/fa';
 import {
-  LineChart,
-  Line,
   BarChart,
   Bar,
+  Line,
   AreaChart,
   Area,
   PieChart,
   Pie,
   Cell,
+  ComposedChart,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
   Legend,
   ResponsiveContainer,
-  ComposedChart,
 } from 'recharts';
 
 // ==================== INTERFACES ====================
@@ -92,6 +89,58 @@ interface BudgetAlert {
   percentage: number;
   severity: 'warning' | 'critical';
   message: string;
+}
+
+interface Transaction {
+  id: number;
+  type: string;
+  amount: number;
+  category: string;
+  description: string;
+  transaction_date: string;
+}
+
+interface Loan {
+  id: number;
+  lender_name: string;
+  loan_type: string;
+  interest_rate: number;
+  balance_remaining: number;
+  monthly_payment: number;
+  status: string;
+}
+
+interface PettyCash {
+  id: number;
+  amount: number;
+  purpose: string;
+  category: string;
+  date: string;
+}
+
+interface Invoice {
+  id: number;
+  invoice_number: string;
+  customer_name: string;
+  balance_due: number;
+  due_date: string;
+  status: string;
+}
+
+interface Payroll {
+  id: number;
+  month: number;
+  year: number;
+  total_net_salary: number;
+  processed_date: string;
+  status: string;
+}
+
+interface Customer {
+  id: number;
+  name: string;
+  total_spent: number;
+  total_visits: number;
 }
 
 // ==================== HELPER FUNCTIONS ====================
@@ -139,18 +188,41 @@ const getPeriodDisplay = (budget: Budget): string => {
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (active && payload && payload.length) {
     return (
-      <div className="bg-white p-3 rounded-lg shadow-lg border border-gray-200">
-        <p className="font-medium text-gray-900 mb-2">{label}</p>
-        {payload.map((item: any, index: number) => (
-          <div key={index} className="flex justify-between gap-4 text-sm">
-            <span style={{ color: item.color }}>{item.name}:</span>
-            <span className="font-medium">
-              {item.name === 'Profit Margin %' || item.dataKey === 'margin' || item.name === 'Profit Margin'
-                ? `${item.value.toFixed(1)}%`
-                : formatCurrency(item.value)}
-            </span>
-          </div>
-        ))}
+      <div className="bg-white p-4 rounded-lg shadow-lg border border-gray-200 min-w-[200px]">
+        <p className="font-semibold text-gray-900 mb-2 border-b pb-1">{label}</p>
+        {payload.map((item: any, index: number) => {
+          let formattedValue = '';
+          
+          if (item.name === 'Revenue') {
+            formattedValue = formatCurrency(item.value);
+            return (
+              <div key={index} className="flex justify-between gap-4 text-sm py-1">
+                <span style={{ color: item.color }}>Revenue:</span>
+                <span className="font-medium text-green-600">{formattedValue}</span>
+              </div>
+            );
+          } else if (item.name === 'Expenses') {
+            formattedValue = formatCurrency(item.value);
+            return (
+              <div key={index} className="flex justify-between gap-4 text-sm py-1">
+                <span style={{ color: item.color }}>Expenses:</span>
+                <span className="font-medium text-red-600">{formattedValue}</span>
+              </div>
+            );
+          } else if (item.name === 'Net Profit') {
+            const isPositive = item.value >= 0;
+            formattedValue = formatCurrency(Math.abs(item.value));
+            return (
+              <div key={index} className="flex justify-between gap-4 text-sm py-1">
+                <span style={{ color: item.color }}>Net Profit:</span>
+                <span className={`font-medium ${isPositive ? 'text-green-600' : 'text-red-600'}`}>
+                  {isPositive ? `+${formattedValue}` : `-${formattedValue}`}
+                </span>
+              </div>
+            );
+          }
+          return null;
+        })}
       </div>
     );
   }
@@ -164,12 +236,15 @@ function FinancialMetricCard({ title, value, change, icon: Icon, isNegative, sub
   const isNegativeChange = toNumber(change) < 0;
   
   return (
-    <div className="bg-white rounded-xl p-4 border border-gray-100 shadow-sm hover:shadow-md transition-all cursor-pointer">
+    <div 
+      onClick={onClick}
+      className="bg-white rounded-xl p-4 border border-gray-100 shadow-sm hover:shadow-md transition-all cursor-pointer"
+    >
       <div className="flex items-start justify-between">
         <div>
           <p className="text-xs text-gray-500 mb-1">{title}</p>
           <p className={`text-xl font-bold ${isNegative ? 'text-red-600' : 'text-green-600'}`}>{value}</p>
-          {change !== undefined && change !== null && (
+          {change !== undefined && change !== null && change !== 0 && (
             <div className={`flex items-center gap-1 mt-1 text-xs ${isPositive ? 'text-green-600' : isNegativeChange ? 'text-red-600' : 'text-gray-500'}`}>
               {isPositive ? <FiArrowUp size={12} /> : isNegativeChange ? <FiArrowDown size={12} /> : null}
               <span>{Math.abs(toNumber(change))}% from last period</span>
@@ -213,9 +288,26 @@ function Section({ title, icon: Icon, children, action }: any) {
   );
 }
 
-// Budget Progress Bar Component
 function BudgetProgressBar({ planned, actual, title, type }: any) {
-  const percentage = planned > 0 ? Math.min((actual / planned) * 100, 100) : 0;
+  if (planned <= 0) {
+    return (
+      <div className="mb-3">
+        <div className="flex justify-between text-sm mb-1">
+          <span className="font-medium text-gray-700">{title}</span>
+          <div className="text-right">
+            <span className="text-xs text-gray-500">Actual: {formatCurrency(actual)}</span>
+            <span className="text-xs text-gray-400 mx-1">/</span>
+            <span className="text-xs text-gray-500">No target set</span>
+          </div>
+        </div>
+        <div className="w-full bg-gray-200 rounded-full h-2">
+          <div className="h-2 rounded-full bg-gray-400" style={{ width: '0%' }} />
+        </div>
+      </div>
+    );
+  }
+  
+  const percentage = Math.min((actual / planned) * 100, 100);
   const isOverBudget = actual > planned;
   const color = type === 'income' 
     ? (isOverBudget ? 'text-green-600' : 'text-yellow-600')
@@ -240,7 +332,7 @@ function BudgetProgressBar({ planned, actual, title, type }: any) {
       <div className="flex justify-between mt-1">
         <span className="text-xs text-gray-400">{percentage.toFixed(0)}% of target</span>
         <span className={`text-xs font-medium ${color}`}>
-          {isOverBudget ? (type === 'income' ? 'Exceeding target! 🎉' : 'Over budget ⚠️') : 'On track ✓'}
+          {isOverBudget ? (type === 'income' ? 'Exceeding target!' : 'Over budget') : 'On track'}
         </span>
       </div>
     </div>
@@ -253,13 +345,12 @@ export default function FinancialDashboard() {
   const { user } = useAuthStore();
   const [isLoading, setIsLoading] = useState(true);
   const [selectedPeriod, setSelectedPeriod] = useState<'month' | 'quarter' | 'year'>('month');
-  const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
-  const [currentMonth, setCurrentMonth] = useState(new Date().getMonth() + 1);
+  const [currentYear] = useState(new Date().getFullYear());
+  const [currentMonth] = useState(new Date().getMonth() + 1);
   
   // Main Financial Data
   const [pnlData, setPnlData] = useState<any>(null);
   const [cashFlowData, setCashFlowData] = useState<any>(null);
-  const [trendData, setTrendData] = useState<any>(null);
   
   // Budget Data
   const [activeBudget, setActiveBudget] = useState<Budget | null>(null);
@@ -268,46 +359,98 @@ export default function FinancialDashboard() {
   const [hasBudget, setHasBudget] = useState(false);
   
   // Money Flow Data
-  const [transactions, setTransactions] = useState<any[]>([]);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [totalIncome, setTotalIncome] = useState(0);
   const [totalExpenses, setTotalExpenses] = useState(0);
-  const [netCashFlow, setNetCashFlow] = useState(0);
+  const [netProfit, setNetProfit] = useState(0);
   
   // Customer Money Data
-  const [customers, setCustomers] = useState<any[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
   const [totalCustomerMoney, setTotalCustomerMoney] = useState(0);
-  const [customerRevenue, setCustomerRevenue] = useState(0);
   const [topSpendingCustomers, setTopSpendingCustomers] = useState<any[]>([]);
   
   // Loans Data
-  const [loans, setLoans] = useState<any[]>([]);
+  const [loans, setLoans] = useState<Loan[]>([]);
   const [totalLoanBalance, setTotalLoanBalance] = useState(0);
   const [totalMonthlyLoanPayments, setTotalMonthlyLoanPayments] = useState(0);
   
   // Petty Cash Data
-  const [pettyCash, setPettyCash] = useState<any[]>([]);
+  const [pettyCash, setPettyCash] = useState<PettyCash[]>([]);
   const [pettyCashTotal, setPettyCashTotal] = useState(0);
   const [pettyCashByCategory, setPettyCashByCategory] = useState<any[]>([]);
   
   // Payroll Data
   const [payrollTotal, setPayrollTotal] = useState(0);
-  const [payrollHistory, setPayrollHistory] = useState<any[]>([]);
+  const [payrollHistory, setPayrollHistory] = useState<Payroll[]>([]);
   
   // Invoice Data
-  const [invoices, setInvoices] = useState<any[]>([]);
-  const [pendingInvoices, setPendingInvoices] = useState<any[]>([]);
-  const [overdueInvoices, setOverdueInvoices] = useState<any[]>([]);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [pendingInvoices, setPendingInvoices] = useState<Invoice[]>([]);
+  const [overdueInvoices, setOverdueInvoices] = useState<Invoice[]>([]);
   
   // Revenue by Source
   const [revenueBySource, setRevenueBySource] = useState<any[]>([]);
 
-  useEffect(() => {
-    fetchAllFinancialData();
-  }, [selectedPeriod, currentYear, currentMonth]);
+  // Calculate profit margin
+  const profitMargin = totalIncome > 0 ? (netProfit / totalIncome) * 100 : 0;
 
-  const fetchBudgetForPeriod = async () => {
+  // Generate monthly chart data with revenue, expenses, and profit
+  const monthlyChartData = (() => {
+    const monthsMap: Record<string, any> = {};
+    const today = new Date();
+    
+    // Create last 6 months structure
+    for (let i = 5; i >= 0; i--) {
+      const date = new Date(today.getFullYear(), today.getMonth() - i, 1);
+      const monthKey = `${date.getFullYear()}-${date.getMonth() + 1}`;
+      const monthName = monthNames[date.getMonth()];
+      monthsMap[monthKey] = {
+        month: monthName,
+        revenue: 0,
+        expenses: 0,
+        profit: 0,
+        fullMonth: fullMonthNames[date.getMonth()],
+      };
+    }
+    
+    // Calculate revenue and expenses from transactions
+    transactions.forEach((t: Transaction) => {
+      const date = new Date(t.transaction_date);
+      const monthKey = `${date.getFullYear()}-${date.getMonth() + 1}`;
+      if (monthsMap[monthKey]) {
+        const amount = toNumber(t.amount);
+        if (t.type === 'income') {
+          monthsMap[monthKey].revenue += amount;
+        } else if (t.type === 'expense') {
+          monthsMap[monthKey].expenses += amount;
+        }
+      }
+    });
+    
+    // Calculate profit
+    Object.keys(monthsMap).forEach(key => {
+      monthsMap[key].profit = monthsMap[key].revenue - monthsMap[key].expenses;
+    });
+    
+    return Object.values(monthsMap);
+  })();
+
+  // Get budget status for card
+  const getBudgetStatus = useCallback(() => {
+    if (!activeBudget) return null;
+    const profitVariance = activeBudget.actual_profit - activeBudget.planned_profit;
+    if (profitVariance >= 0) {
+      return { text: 'Exceeding Profit Target', color: 'bg-green-100 text-green-700' };
+    } else if (profitVariance > -activeBudget.planned_profit * 0.1) {
+      return { text: 'Slightly Below Target', color: 'bg-yellow-100 text-yellow-700' };
+    } else {
+      return { text: 'Below Target - Review', color: 'bg-red-100 text-red-700' };
+    }
+  }, [activeBudget]);
+
+  // Fetch budget for period
+  const fetchBudgetForPeriod = useCallback(async () => {
     try {
-      let period = selectedPeriod;
       let budgetParams: any = { year: currentYear, status: 'active' };
       
       if (selectedPeriod === 'month') {
@@ -315,12 +458,13 @@ export default function FinancialDashboard() {
         const response = await financialsApi.getBudgets(budgetParams);
         const budgets = response.data.results || response.data || [];
         const monthBudget = budgets.find((b: any) => b.month === currentMonth);
+        
         if (monthBudget) {
-          setHasBudget(true);
           const vsActual = await financialsApi.getBudgetVsActual(monthBudget.id);
           setActiveBudget(vsActual.data.budget);
           setBudgetItems(vsActual.data.budget.items || []);
           setBudgetAlerts(vsActual.data.alerts || []);
+          setHasBudget(true);
         } else {
           setHasBudget(false);
           setActiveBudget(null);
@@ -334,12 +478,13 @@ export default function FinancialDashboard() {
         const response = await financialsApi.getBudgets(budgetParams);
         const budgets = response.data.results || response.data || [];
         const quarterBudget = budgets.find((b: any) => b.quarter === quarter);
+        
         if (quarterBudget) {
-          setHasBudget(true);
           const vsActual = await financialsApi.getBudgetVsActual(quarterBudget.id);
           setActiveBudget(vsActual.data.budget);
           setBudgetItems(vsActual.data.budget.items || []);
           setBudgetAlerts(vsActual.data.alerts || []);
+          setHasBudget(true);
         } else {
           setHasBudget(false);
           setActiveBudget(null);
@@ -351,12 +496,13 @@ export default function FinancialDashboard() {
         const response = await financialsApi.getBudgets(budgetParams);
         const budgets = response.data.results || response.data || [];
         const yearBudget = budgets[0];
+        
         if (yearBudget) {
-          setHasBudget(true);
           const vsActual = await financialsApi.getBudgetVsActual(yearBudget.id);
           setActiveBudget(vsActual.data.budget);
           setBudgetItems(vsActual.data.budget.items || []);
           setBudgetAlerts(vsActual.data.alerts || []);
+          setHasBudget(true);
         } else {
           setHasBudget(false);
           setActiveBudget(null);
@@ -371,9 +517,10 @@ export default function FinancialDashboard() {
       setBudgetItems([]);
       setBudgetAlerts([]);
     }
-  };
+  }, [selectedPeriod, currentYear, currentMonth]);
 
-  const fetchAllFinancialData = async () => {
+  // Fetch all financial data
+  const fetchAllFinancialData = useCallback(async () => {
     setIsLoading(true);
     try {
       await fetchBudgetForPeriod();
@@ -381,7 +528,6 @@ export default function FinancialDashboard() {
       const [
         pnlRes,
         cashFlowRes,
-        trendsRes,
         transactionsRes,
         customersRes,
         loansRes,
@@ -392,7 +538,6 @@ export default function FinancialDashboard() {
       ] = await Promise.all([
         biApi.getProfitLoss().catch(() => ({ data: null })),
         financialsApi.getCashFlow().catch(() => ({ data: null })),
-        biApi.getTrends().catch(() => ({ data: null })),
         financialsApi.getTransactions().catch(() => ({ data: null })),
         salesApi.getCustomers().catch(() => ({ data: null })),
         financialsApi.getLoans().catch(() => ({ data: null })),
@@ -404,78 +549,81 @@ export default function FinancialDashboard() {
 
       if (pnlRes?.data) setPnlData(pnlRes.data);
       if (cashFlowRes?.data) setCashFlowData(cashFlowRes.data);
-      if (trendsRes?.data) setTrendData(trendsRes.data);
       
-      let transactionsList = transactionsRes.data?.results || transactionsRes.data || [];
+      // Process transactions
+      const transactionsList = (transactionsRes?.data?.results || transactionsRes?.data || []) as Transaction[];
       setTransactions(transactionsList);
       
       let income = 0;
       let expenses = 0;
-      transactionsList.forEach((t: any) => {
+      transactionsList.forEach((t: Transaction) => {
         const amount = toNumber(t.amount);
         if (t.type === 'income') income += amount;
         else if (t.type === 'expense') expenses += amount;
       });
       setTotalIncome(income);
       setTotalExpenses(expenses);
-      setNetCashFlow(income - expenses);
+      setNetProfit(income - expenses);
       
-      let customersList = customersRes.data?.results || customersRes.data || [];
+      // Process customers
+      const customersList = (customersRes?.data?.results || customersRes?.data || []) as Customer[];
       setCustomers(customersList);
       
-      let totalSpent = 0;
-      const customerSpending = customersList.map((c: any) => ({
+      const customerSpending = customersList.map((c: Customer) => ({
         id: c.id,
         name: c.name || 'Customer',
         total_spent: toNumber(c.total_spent),
         total_visits: toNumber(c.total_visits),
-        average_order: toNumber(c.total_visits) > 0 ? toNumber(c.total_spent) / toNumber(c.total_visits) : 0,
       }));
-      totalSpent = customerSpending.reduce((sum: number, c: any) => sum + c.total_spent, 0);
+      const totalSpent = customerSpending.reduce((sum: number, c: any) => sum + c.total_spent, 0);
       setTotalCustomerMoney(totalSpent);
-      setCustomerRevenue(totalSpent);
       setTopSpendingCustomers(customerSpending.sort((a: any, b: any) => b.total_spent - a.total_spent).slice(0, 5));
       
-      let loansList = loansRes.data?.results || loansRes.data || [];
+      // Process loans
+      const loansList = (loansRes?.data?.results || loansRes?.data || []) as Loan[];
       setLoans(loansList);
-      const activeLoans = loansList.filter((l: any) => l.status === 'active');
-      setTotalLoanBalance(activeLoans.reduce((sum: number, l: any) => sum + toNumber(l.balance_remaining), 0));
-      setTotalMonthlyLoanPayments(activeLoans.reduce((sum: number, l: any) => sum + toNumber(l.monthly_payment), 0));
+      const activeLoans = loansList.filter((l: Loan) => l.status === 'active');
+      setTotalLoanBalance(activeLoans.reduce((sum: number, l: Loan) => sum + toNumber(l.balance_remaining), 0));
+      setTotalMonthlyLoanPayments(activeLoans.reduce((sum: number, l: Loan) => sum + toNumber(l.monthly_payment), 0));
       
-      let pettyCashList = pettyCashRes.data?.results || pettyCashRes.data || [];
+      // Process petty cash
+      const pettyCashList = (pettyCashRes?.data?.results || pettyCashRes?.data || []) as PettyCash[];
       setPettyCash(pettyCashList);
-      const pettyTotal = pettyCashList.reduce((sum: number, p: any) => sum + toNumber(p.amount), 0);
+      const pettyTotal = pettyCashList.reduce((sum: number, p: PettyCash) => sum + toNumber(p.amount), 0);
       setPettyCashTotal(pettyTotal);
       
-      const pettyCategories: any = {};
-      pettyCashList.forEach((p: any) => {
+      const pettyCategories: Record<string, number> = {};
+      pettyCashList.forEach((p: PettyCash) => {
         const cat = p.category || 'Other';
         pettyCategories[cat] = (pettyCategories[cat] || 0) + toNumber(p.amount);
       });
       setPettyCashByCategory(Object.entries(pettyCategories).map(([name, value]) => ({ name, value })));
       
-      let payrollList = payrollRes.data?.results || payrollRes.data || [];
+      // Process payroll
+      const payrollList = (payrollRes?.data?.results || payrollRes?.data || []) as Payroll[];
       const currentYearDate = new Date().getFullYear();
       const currentMonthDate = new Date().getMonth() + 1;
       const monthlyPayroll = payrollList
-        .filter((p: any) => p.month === currentMonthDate && p.year === currentYearDate && p.status === 'paid')
-        .reduce((sum: number, p: any) => sum + toNumber(p.total_net_salary), 0);
+        .filter((p: Payroll) => p.month === currentMonthDate && p.year === currentYearDate && p.status === 'paid')
+        .reduce((sum: number, p: Payroll) => sum + toNumber(p.total_net_salary), 0);
       setPayrollTotal(monthlyPayroll);
       setPayrollHistory(payrollList.slice(0, 6));
       
-      let invoicesList = invoicesRes.data?.results || invoicesRes.data || [];
+      // Process invoices
+      const invoicesList = (invoicesRes?.data?.results || invoicesRes?.data || []) as Invoice[];
       setInvoices(invoicesList);
-      const pending = invoicesList.filter((i: any) => i.status !== 'paid' && i.status !== 'cancelled');
+      const pending = invoicesList.filter((i: Invoice) => i.status !== 'paid' && i.status !== 'cancelled');
       setPendingInvoices(pending);
-      const overdue = pending.filter((i: any) => {
+      const today = new Date();
+      const overdue = pending.filter((i: Invoice) => {
         const dueDate = new Date(i.due_date);
-        const today = new Date();
         return dueDate < today;
       });
       setOverdueInvoices(overdue);
       
-      const salesList = salesRes.data?.results || salesRes.data || [];
-      const revenueByPaymentMethod: any = {};
+      // Process revenue by payment method
+      const salesList = salesRes?.data?.results || salesRes?.data || [];
+      const revenueByPaymentMethod: Record<string, number> = {};
       salesList.forEach((sale: any) => {
         const method = sale.payment_method || 'cash';
         revenueByPaymentMethod[method] = (revenueByPaymentMethod[method] || 0) + toNumber(sale.total_amount);
@@ -488,29 +636,11 @@ export default function FinancialDashboard() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [fetchBudgetForPeriod]);
 
-  const monthlyRevenueData = (trendData?.monthly || []).slice(-6).map((item: any) => ({
-    month: item.month?.substring(0, 3) || item.short_month || item.month || 'N/A',
-    revenue: toNumber(item.revenue),
-    expenses: toNumber(pnlData?.expenses?.total) * 0.2 || 0,
-    profit: toNumber(item.revenue) - (toNumber(pnlData?.expenses?.total) * 0.2 || 0),
-  }));
-
-  const profitMarginValue = totalIncome > 0 ? (netCashFlow / totalIncome) * 100 : 0;
-
-  // Budget status for card
-  const getBudgetStatus = () => {
-    if (!activeBudget) return null;
-    const profitVariance = activeBudget.actual_profit - activeBudget.planned_profit;
-    if (profitVariance >= 0) {
-      return { text: 'Exceeding Profit Target 🎉', color: 'bg-green-100 text-green-700' };
-    } else if (profitVariance > -activeBudget.planned_profit * 0.1) {
-      return { text: 'Slightly Below Target', color: 'bg-yellow-100 text-yellow-700' };
-    } else {
-      return { text: 'Below Target - Review', color: 'bg-red-100 text-red-700' };
-    }
-  };
+  useEffect(() => {
+    fetchAllFinancialData();
+  }, [fetchAllFinancialData]);
 
   if (isLoading) {
     return (
@@ -613,18 +743,18 @@ export default function FinancialDashboard() {
           } : undefined}
         />
         <FinancialMetricCard
-          title="Net Cash Flow"
-          value={formatCurrency(Math.abs(netCashFlow))}
-          change={netCashFlow > 0 ? 15.3 : -8.7}
+          title="Net Profit"
+          value={formatCurrency(Math.abs(netProfit))}
+          change={netProfit > 0 ? 15.3 : -8.7}
           icon={FiActivity}
-          isNegative={netCashFlow < 0}
-          subtext={netCashFlow >= 0 ? 'Positive cash flow' : 'Negative cash flow - Review expenses'}
+          isNegative={netProfit < 0}
+          subtext={netProfit >= 0 ? 'Positive cash flow' : 'Negative cash flow - Review expenses'}
         />
         <FinancialMetricCard
           title="Profit vs Budget"
-          value={hasBudget && activeBudget ? formatCurrency(activeBudget.actual_profit) : formatCurrency(netCashFlow)}
+          value={hasBudget && activeBudget ? formatCurrency(activeBudget.actual_profit) : formatCurrency(netProfit)}
           icon={FiTarget}
-          isNegative={activeBudget ? activeBudget.actual_profit < 0 : netCashFlow < 0}
+          isNegative={activeBudget ? activeBudget.actual_profit < 0 : netProfit < 0}
           subtext={hasBudget && activeBudget ? `Target: ${formatCurrency(activeBudget.planned_profit)}` : 'No active budget'}
           budgetStatus={getBudgetStatus()}
         />
@@ -707,7 +837,7 @@ export default function FinancialDashboard() {
         />
         <FinancialMetricCard
           title="Customer Revenue"
-          value={formatCurrency(customerRevenue)}
+          value={formatCurrency(totalCustomerMoney)}
           change={18.2}
           icon={FiShoppingBag}
           isNegative={false}
@@ -729,67 +859,98 @@ export default function FinancialDashboard() {
         />
       </div>
 
-      {/* Profit & Loss Section */}
+      {/* Profit & Loss Section with Composed Chart */}
       <Section title="Profit & Loss Statement" icon={FaChartLine}>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
           <div className="bg-green-50 rounded-xl p-3 text-center">
             <p className="text-xs text-gray-500">Gross Revenue</p>
-            <p className="text-xl font-bold text-green-600">{formatCurrency(pnlData?.income?.total || totalIncome)}</p>
+            <p className="text-xl font-bold text-green-600">{formatCurrency(totalIncome)}</p>
           </div>
           <div className="bg-red-50 rounded-xl p-3 text-center">
             <p className="text-xs text-gray-500">Total Costs</p>
-            <p className="text-xl font-bold text-red-600">{formatCurrency(pnlData?.expenses?.total || totalExpenses)}</p>
+            <p className="text-xl font-bold text-red-600">{formatCurrency(totalExpenses)}</p>
           </div>
-          <div className={`rounded-xl p-3 text-center ${(pnlData?.profit?.net_profit || netCashFlow) >= 0 ? 'bg-green-50' : 'bg-red-50'}`}>
+          <div className={`rounded-xl p-3 text-center ${netProfit >= 0 ? 'bg-green-50' : 'bg-red-50'}`}>
             <p className="text-xs text-gray-500">Net Profit</p>
-            <p className={`text-xl font-bold ${(pnlData?.profit?.net_profit || netCashFlow) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-              {formatCurrency(pnlData?.profit?.net_profit || netCashFlow)}
+            <p className={`text-xl font-bold ${netProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+              {formatCurrency(Math.abs(netProfit))}
             </p>
-            <p className="text-xs">Margin: {formatPercent(pnlData?.profit?.net_margin || profitMarginValue)}</p>
+            <p className="text-xs">Margin: {formatPercent(profitMargin)}</p>
           </div>
         </div>
         
-        <ResponsiveContainer width="100%" height={300}>
-          <ComposedChart data={monthlyRevenueData}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="month" />
-            <YAxis yAxisId="left" tickFormatter={(v) => `TZS ${toNumber(v)/1000}k`} />
-            <YAxis yAxisId="right" orientation="right" tickFormatter={(v) => `${toNumber(v)}%`} />
-            <Tooltip content={<CustomTooltip />} />
-            <Legend />
-            <Bar yAxisId="left" dataKey="revenue" fill="#10B981" name="Revenue" radius={[4, 4, 0, 0]} />
-            <Bar yAxisId="left" dataKey="expenses" fill="#EF4444" name="Expenses" radius={[4, 4, 0, 0]} />
-            <Line yAxisId="right" type="monotone" dataKey="profit" stroke="#3B82F6" name="Profit" strokeWidth={2} />
-          </ComposedChart>
-        </ResponsiveContainer>
+        {/* Composed Chart - Revenue (Bar), Expenses (Line), Profit (Line) */}
+        {monthlyChartData.length > 0 && monthlyChartData.some((d: any) => d.revenue > 0 || d.expenses > 0) ? (
+          <div>
+            <h4 className="font-medium text-gray-700 mb-3">Financial Trend (Last 6 Months)</h4>
+            <ResponsiveContainer width="100%" height={350}>
+              <ComposedChart data={monthlyChartData}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="month" />
+                <YAxis yAxisId="left" tickFormatter={(v) => `TZS ${toNumber(v)/1000}k`} />
+                <YAxis yAxisId="right" orientation="right" tickFormatter={(v) => `${toNumber(v)}k`} />
+                <Tooltip content={<CustomTooltip />} />
+                <Legend />
+                <Bar yAxisId="left" dataKey="revenue" fill="#10B981" name="Revenue" radius={[4, 4, 0, 0]} />
+                <Line yAxisId="right" type="monotone" dataKey="expenses" stroke="#EF4444" name="Expenses" strokeWidth={2} dot={{ r: 4 }} />
+                <Line yAxisId="right" type="monotone" dataKey="profit" stroke="#F59E0B" name="Net Profit" strokeWidth={2} dot={{ r: 4 }} />
+              </ComposedChart>
+            </ResponsiveContainer>
+            <div className="flex justify-center gap-6 mt-3 text-xs">
+              <div className="flex items-center gap-1"><div className="w-3 h-3 bg-green-500 rounded"></div><span>Revenue (Bar)</span></div>
+              <div className="flex items-center gap-1"><div className="w-3 h-0.5 bg-red-500"></div><span>Expenses (Line)</span></div>
+              <div className="flex items-center gap-1"><div className="w-3 h-0.5 bg-amber-500"></div><span>Net Profit (Line)</span></div>
+            </div>
+          </div>
+        ) : (
+          <div className="text-center py-12 bg-gray-50 rounded-lg">
+            <FiBarChart2 className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+            <p className="text-gray-500">No financial data available for the chart</p>
+            <p className="text-xs text-gray-400 mt-1">Add transactions to see revenue, expenses, and profit trends</p>
+          </div>
+        )}
         
         {/* Income & Expense Breakdown */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
           <div>
             <h4 className="font-medium text-gray-700 mb-2">Income Sources</h4>
-            <div className="space-y-2">
-              {pnlData?.income?.breakdown?.map((item: any, idx: number) => (
-                <div key={idx} className="flex justify-between text-sm">
-                  <span className="capitalize">{item.category?.replace('_', ' ') || 'Other'}</span>
-                  <span className="font-medium text-green-600">{formatCurrency(item.amount)}</span>
-                </div>
-              ))}
-              {(!pnlData?.income?.breakdown || pnlData.income.breakdown.length === 0) && (
+            <div className="space-y-2 max-h-64 overflow-y-auto">
+              {pnlData?.income?.breakdown && pnlData.income.breakdown.length > 0 ? (
+                pnlData.income.breakdown.map((item: any, idx: number) => (
+                  <div key={idx} className="flex justify-between text-sm">
+                    <span className="capitalize">{item.category?.replace('_', ' ') || 'Other'}</span>
+                    <span className="font-medium text-green-600">{formatCurrency(item.amount)}</span>
+                  </div>
+                ))
+              ) : (
                 <div className="text-center text-gray-400 py-4">No income data available</div>
+              )}
+              {pnlData?.income?.total > 0 && (
+                <div className="pt-2 mt-2 border-t border-gray-200 flex justify-between font-semibold">
+                  <span>Total Income</span>
+                  <span className="text-green-600">{formatCurrency(pnlData.income.total)}</span>
+                </div>
               )}
             </div>
           </div>
           <div>
             <h4 className="font-medium text-gray-700 mb-2">Expense Categories</h4>
-            <div className="space-y-2">
-              {pnlData?.expenses?.breakdown?.map((item: any, idx: number) => (
-                <div key={idx} className="flex justify-between text-sm">
-                  <span className="capitalize">{item.category?.replace('_', ' ') || 'Other'}</span>
-                  <span className="font-medium text-red-600">{formatCurrency(item.amount)}</span>
-                </div>
-              ))}
-              {(!pnlData?.expenses?.breakdown || pnlData.expenses.breakdown.length === 0) && (
+            <div className="space-y-2 max-h-64 overflow-y-auto">
+              {pnlData?.expenses?.breakdown && pnlData.expenses.breakdown.length > 0 ? (
+                pnlData.expenses.breakdown.map((item: any, idx: number) => (
+                  <div key={idx} className="flex justify-between text-sm">
+                    <span className="capitalize">{item.category?.replace('_', ' ') || 'Other'}</span>
+                    <span className="font-medium text-red-600">{formatCurrency(item.amount)}</span>
+                  </div>
+                ))
+              ) : (
                 <div className="text-center text-gray-400 py-4">No expense data available</div>
+              )}
+              {pnlData?.expenses?.total > 0 && (
+                <div className="pt-2 mt-2 border-t border-gray-200 flex justify-between font-semibold">
+                  <span>Total Expenses</span>
+                  <span className="text-red-600">{formatCurrency(pnlData.expenses.total)}</span>
+                </div>
               )}
             </div>
           </div>
@@ -1014,16 +1175,22 @@ export default function FinancialDashboard() {
       </div>
 
       {/* Cash Flow Section */}
-      {cashFlowData && (
+      {cashFlowData && cashFlowData.forecast_30_days && (
         <div className="mt-6 bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
           <h3 className="font-semibold text-gray-900 mb-4">Cash Flow Forecast (30 Days)</h3>
           <ResponsiveContainer width="100%" height={250}>
-            <AreaChart data={cashFlowData.forecast_30_days?.slice(0, 30) || []}>
+            <AreaChart data={cashFlowData.forecast_30_days.slice(0, 30)}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="day" />
               <YAxis tickFormatter={(v) => `TZS ${toNumber(v)/1000}k`} />
               <Tooltip content={<CustomTooltip />} />
-              <Area type="monotone" dataKey="projected_balance" stroke={toNumber(cashFlowData.current_balance) < 0 ? "#EF4444" : "#10B981"} fill={toNumber(cashFlowData.current_balance) < 0 ? "#EF4444" : "#10B981"} fillOpacity={0.1} />
+              <Area 
+                type="monotone" 
+                dataKey="projected_balance" 
+                stroke={toNumber(cashFlowData.current_balance) < 0 ? "#EF4444" : "#10B981"} 
+                fill={toNumber(cashFlowData.current_balance) < 0 ? "#EF4444" : "#10B981"} 
+                fillOpacity={0.1} 
+              />
             </AreaChart>
           </ResponsiveContainer>
           {cashFlowData.warning && (
@@ -1046,12 +1213,12 @@ export default function FinancialDashboard() {
 
       {/* Footer */}
       <div className="mt-6 pt-4 border-t border-gray-200">
-        <div className="flex justify-between items-center text-xs text-gray-400">
+        <div className="flex flex-wrap justify-between items-center text-xs text-gray-400 gap-2">
           <span>Data as of {new Date().toLocaleString()}</span>
-          <div className="flex gap-4">
+          <div className="flex flex-wrap gap-4">
             <span className="flex items-center gap-1">Green = Positive / Income</span>
             <span className="flex items-center gap-1">Red = Negative / Expenses</span>
-            {hasBudget && <span className="flex items-center gap-1 text-blue-600">📊 Budget tracking active</span>}
+            {hasBudget && <span className="flex items-center gap-1 text-blue-600">Budget tracking active</span>}
             <Link href="/reports" className="hover:text-blue-600">Download Financial Reports →</Link>
           </div>
         </div>

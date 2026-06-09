@@ -66,3 +66,10 @@ curl -X POST http://127.0.0.1:8000/api/v1/financials/budgets/ \
     }
   ]
 }'
+
+
+
+
+curl -X GET "http://127.0.0.1:8000/api/v1/bi/dashboard/" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzgwMzE1MTgxLCJpYXQiOjE3ODAzMTQyODEsImp0aSI6IjAwMjNiNjc3M2VlMTRhN2NhYTNlYzE1NDcyNjEzNjk5IiwidXNlcl9pZCI6MX0.l09Xb0Wfy2BU7DWnKipKNAmMOr0_i--Dwvfc4eKt6Ds" \
+  | python3 -m json.tool

@@ -112,6 +112,10 @@ const navItems: NavItem[] = [
     subItems: [
       { name: 'Dashboard', href: '/bi/dashboard', module: 'analytics' },
       { name: 'Financial Analytics', href: '/bi/financial', module: 'analytics' },
+      { name: 'Sales Analytics', href: '/bi/sales', module: 'analytics' },
+      { name: 'Inventory Analytics', href: '/bi/inventory', module: 'analytics' },
+      { name: 'HR Analytics', href: '/bi/hr', module: 'analytics' },
+      { name: 'Customer Analytics', href: '/bi/customers', module: 'analytics' },
       { name: 'Reports', href: '/reports', module: 'analytics' },
     ],
   },
