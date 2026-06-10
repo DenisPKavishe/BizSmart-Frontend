@@ -12,19 +12,19 @@ export const auditApi = {
     user_id?: number;
     page?: number;
     page_size?: number;
-  }) => api.get('/audit/audit-logs/', { params }),
+  }) => api.get('auth/audit-logs/', { params }),
   
   // Get single audit log
   getAuditLog: (id: number) => 
-    api.get(`/audit/audit-logs/${id}/`),
+    api.get(`auth/audit-logs/${id}/`),
   
   // Get current user's logs
   getMyLogs: () => 
-    api.get('/audit/audit-logs/my_logs/'),
+    api.get('auth/audit-logs/my_logs/'),
   
   // Get audit statistics
   getAuditStats: () => 
-    api.get('/audit/audit-logs/stats/'),
+    api.get('auth/audit-logs/stats/'),
   
   // Export audit logs
   exportAuditLogs: (params?: {
@@ -33,18 +33,18 @@ export const auditApi = {
     action?: string;
     module?: string;
     format?: 'csv' | 'json';
-  }) => api.get('/audit/audit-logs/export/', { 
+  }) => api.get('auth/audit-logs/export/', { 
     params,
     responseType: 'blob' 
   }),
   
   // Get available modules (for filters)
   getModules: () => 
-    api.get('/audit/audit-logs/modules/'),
+    api.get('auth/audit-logs/modules/'),
   
   // Get available actions (for filters)
   getActions: () => 
-    api.get('/audit/audit-logs/actions/'),
+    api.get('auth/audit-logs/actions/'),
 };
 
 //AUTHENTICATION 

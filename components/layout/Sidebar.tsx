@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useAuthStore } from '@/store/authStore';
@@ -23,7 +22,6 @@ import {
   FiActivity,
 } from 'react-icons/fi';
 import { hasAccess, normalizeRole } from '@/config/permissions';
-
 
 interface SubNavItem {
   name: string;
@@ -182,14 +180,16 @@ export default function Sidebar({ isMobileOpen, onMobileClose }: SidebarProps) {
     return pathname === href || pathname.startsWith(href + '/');
   };
 
-
   // FILTER NAV ITEMS BASED ON ROLE PERMISSIONS
- 
-  
   const filteredNavItems: NavItem[] = navItems
     .filter((item) => {
       // Always include Profile
       if (item.module === 'profile') return true;
+      // Always include Audit Logs for allowed roles
+      if (item.module === 'audit') {
+        const allowedRoles = ['owner', 'general_manager', 'accountant', 'auditor'];
+        return allowedRoles.includes(normalizedRole);
+      }
       // Check if role has access to this module
       return hasAccess(role, item.module);
     })
@@ -212,9 +212,9 @@ export default function Sidebar({ isMobileOpen, onMobileClose }: SidebarProps) {
       }
       return item;
     })
-    .filter((item): item is NavItem => item !== null); // Type guard to filter out null
+    .filter((item): item is NavItem => item !== null);
 
-  // Debug logging to see what's being filtered
+  // Debug logging
   console.log('User role:', role);
   console.log('Normalized role:', normalizedRole);
   console.log('Filtered nav items:', filteredNavItems.map(i => ({ name: i.name, module: i.module })));
@@ -237,12 +237,10 @@ export default function Sidebar({ isMobileOpen, onMobileClose }: SidebarProps) {
         </p>
       </div>
 
-      
       <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto">
         {filteredNavItems.map((item) => {
           const Icon = item.icon;
 
-         
           if (item.subItems && item.subItems.length > 0) {
             const isMenuOpen = openMenus[item.name] || isSubItemActive(item.subItems);
 
@@ -333,10 +331,7 @@ export default function Sidebar({ isMobileOpen, onMobileClose }: SidebarProps) {
     </div>
   );
 
-  
   // MOBILE MENU TOGGLE BUTTON
- 
-
   const MobileMenuButton = () => (
     <button
       onClick={() => setIsMobileMenuOpen(true)}
@@ -346,20 +341,14 @@ export default function Sidebar({ isMobileOpen, onMobileClose }: SidebarProps) {
     </button>
   );
 
-
   // DESKTOP SIDEBAR
- 
-
   const DesktopSidebar = () => (
     <div className="hidden lg:block w-64 h-screen bg-white border-r border-gray-200 sticky top-0">
       {sidebarContent}
     </div>
   );
 
-  
   // MOBILE SIDEBAR (OVERLAY)
- 
-
   const MobileSidebar = () => {
     if (!isMobileMenuOpen) return null;
 
@@ -387,10 +376,7 @@ export default function Sidebar({ isMobileOpen, onMobileClose }: SidebarProps) {
     );
   };
 
-
   // RENDER
- 
-
   return (
     <>
       <MobileMenuButton />

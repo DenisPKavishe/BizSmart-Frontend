@@ -1,4 +1,4 @@
-// app/(dashboard)/audit-logs/page.tsx - FIXED VERSION
+// app/(dashboard)/audit-logs/page.tsx
 
 'use client';
 
@@ -354,7 +354,6 @@ export default function AuditLogsPage() {
         format,
       });
       
-      // Fix: Use response.data which is the blob
       const blob = response.data;
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
