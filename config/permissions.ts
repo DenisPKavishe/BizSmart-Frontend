@@ -1,8 +1,5 @@
-// config/permissions.ts
 
-// ======================
 // NORMALIZE ROLE
-// ======================
 
 export const normalizeRole = (role?: string): string => {
     if (!role) return '';
@@ -32,22 +29,19 @@ export const normalizeRole = (role?: string): string => {
     return normalized.replace(/\s+/g, '_');
   };
   
-  // ======================
   // DEFAULT REDIRECTS AFTER LOGIN
-  // ======================
   
   export const ROLE_REDIRECTS: Record<string, string> = {
-    owner: '/dashboard',
-    general_manager: '/dashboard',
+    owner: '/sales/pos',
+    general_manager: '/sales/pos',
     accountant: '/financials/transactions',
     inventory_manager: '/inventory/products',
     cashier: '/sales/pos',
     auditor: '/reports',
   };
   
-  // ======================
   // MODULE ACCESS CONTROL
-  // ======================
+
   
   export const ROLE_ACCESS: Record<string, string[]> = {
     owner: [
@@ -72,7 +66,7 @@ export const normalizeRole = (role?: string): string => {
       'profile',
     ],
   
-    // ✅ FIXED: Accountant - NO analytics module
+    //Accountant - NO analytics module
     accountant: [
       'dashboard',
       'financials',
@@ -100,9 +94,7 @@ export const normalizeRole = (role?: string): string => {
     ],
   };
   
-  // ======================
   // MENU ITEMS INTERFACE
-  // ======================
   
   export interface MenuItem {
     name: string;
@@ -111,9 +103,7 @@ export const normalizeRole = (role?: string): string => {
     children?: MenuItem[];
   }
   
-  // ======================
   // GET MENU FOR ROLE
-  // ======================
   
   export const getMenuForRole = (role: string): MenuItem[] => {
     const normalizedRole = normalizeRole(role);
@@ -150,6 +140,7 @@ export const normalizeRole = (role?: string): string => {
         { name: 'HR', href: '/hr', icon: 'FiUsers' },
         { name: 'Analytics', href: '/analytics', icon: 'FiBarChart2' },
         { name: 'Users', href: '/admin/users', icon: 'FiShield' },
+        { name: 'Audit', href: '//audit-logs', icon: 'FiActivity' },
         { name: 'Profile', href: '/profile', icon: 'FiUser' },
       ];
     }
@@ -173,7 +164,7 @@ export const normalizeRole = (role?: string): string => {
       ];
     }
   
-    // ✅ FIXED: Accountant - Financials + HR, NO Analytics
+    //Accountant - Financials + HR
     if (normalizedRole === 'accountant') {
       return [
         { name: 'Dashboard', href: '/dashboard', icon: 'FiHome' },
@@ -216,6 +207,7 @@ export const normalizeRole = (role?: string): string => {
             { name: 'Reports', href: '/financials/reports', icon: 'FiBarChart2' },
           ],
         },
+        { name: 'Audit', href: '/audit-logs', icon: 'FiActivity' },
         { name: 'Profile', href: '/profile', icon: 'FiUser' },
       ];
     }
@@ -235,9 +227,7 @@ export const normalizeRole = (role?: string): string => {
     return [{ name: 'Profile', href: '/profile', icon: 'FiUser' }];
   };
   
-  // ======================
   // CHECK ACCESS FOR MODULE
-  // ======================
   
   export const hasAccess = (role: string, module: string): boolean => {
     const normalizedRole = normalizeRole(role);
@@ -246,9 +236,7 @@ export const normalizeRole = (role?: string): string => {
     return access.includes(module);
   };
   
-  // ======================
   // ACTION PERMISSIONS
-  // ======================
   
   export interface ActionPermissions {
     canView: boolean;
@@ -310,18 +298,14 @@ export const normalizeRole = (role?: string): string => {
     return { canView: false, canCreate: false, canEdit: false, canDelete: false, canExport: false };
   };
   
-  // ======================
   // GET DEFAULT ROUTE AFTER LOGIN
-  // ======================
   
   export const getDefaultRoute = (role: string): string => {
     const normalizedRole = normalizeRole(role);
-    return ROLE_REDIRECTS[normalizedRole] || '/dashboard';
+    return ROLE_REDIRECTS[normalizedRole] || '/profile';
   };
   
-  // ======================
   // CAN ACCESS PAGE (for route guarding)
-  // ======================
   
   export const canAccessPage = (role: string, pathname: string): boolean => {
     const normalizedRole = normalizeRole(role);
@@ -352,7 +336,7 @@ export const normalizeRole = (role?: string): string => {
       return false;
     }
     
-    // ✅ FIXED: Accountant can access financials, hr, dashboard - NO analytics
+    //Accountant can access financials, hr, dashboard
     if (normalizedRole === 'accountant') {
       if (module === 'financials') return true;
       if (module === 'hr') return true;

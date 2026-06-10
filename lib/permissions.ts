@@ -1,4 +1,3 @@
-// lib/permissions.ts
 export const getUserRole = (user: any) => {
     const role = user?.role?.name?.toLowerCase();
     return {

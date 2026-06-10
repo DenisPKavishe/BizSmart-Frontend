@@ -817,7 +817,7 @@ export default function FinancialDashboard() {
           <h3 className="text-lg font-medium text-gray-900 mb-2">No Active Budget</h3>
           <p className="text-gray-500 mb-4">Create a budget to track your financial performance against targets</p>
           <Link 
-            href="/financials/budgets/create" 
+            href="/financials/budgets" 
             className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
           >
             <FiTarget size={16} />

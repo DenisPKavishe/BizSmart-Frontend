@@ -1,4 +1,3 @@
-// components/layout/Sidebar.tsx
 
 'use client';
 
@@ -21,12 +20,10 @@ import {
   FiChevronRight,
   FiUser,
   FiMenu,
+  FiActivity,
 } from 'react-icons/fi';
 import { hasAccess, normalizeRole } from '@/config/permissions';
 
-// ======================
-// TYPES
-// ======================
 
 interface SubNavItem {
   name: string;
@@ -41,10 +38,6 @@ interface NavItem {
   module: string;
   subItems?: SubNavItem[];
 }
-
-// ======================
-// NAVIGATION ITEMS WITH MODULE MAPPING
-// ======================
 
 const navItems: NavItem[] = [
   {
@@ -64,8 +57,8 @@ const navItems: NavItem[] = [
     icon: FiFileText,
     module: 'sales',
     subItems: [
-      { name: 'Sales Items', href: '/sales/items', module: 'sales' },
       { name: 'Sales History', href: '/sales/history', module: 'sales' },
+      { name: 'Sales Items', href: '/sales/items', module: 'sales' },
       { name: 'Customers', href: '/sales/customers', module: 'sales' },
       { name: 'Returns', href: '/sales/returns', module: 'sales' },
     ],
@@ -75,9 +68,9 @@ const navItems: NavItem[] = [
     icon: FiBox,
     module: 'inventory',
     subItems: [
-      { name: 'Products', href: '/inventory/products', module: 'inventory' },
       { name: 'Categories', href: '/inventory/categories', module: 'inventory' },
       { name: 'Suppliers', href: '/inventory/suppliers', module: 'inventory' },
+      { name: 'Products', href: '/inventory/products', module: 'inventory' },
       { name: 'Stock Movements', href: '/inventory/stock-movements', module: 'inventory' },
       { name: 'Purchase Orders', href: '/inventory/purchase-orders', module: 'inventory' },
     ],
@@ -124,6 +117,12 @@ const navItems: NavItem[] = [
     href: '/users',
     icon: FiUsers,
     module: 'users',
+  },
+  {
+    name: 'Audit Logs',
+    href: '/audit-logs',
+    icon: FiActivity,
+    module: 'audit',
   },
   {
     name: 'Profile',
@@ -183,9 +182,9 @@ export default function Sidebar({ isMobileOpen, onMobileClose }: SidebarProps) {
     return pathname === href || pathname.startsWith(href + '/');
   };
 
-  // ======================
+
   // FILTER NAV ITEMS BASED ON ROLE PERMISSIONS
-  // ======================
+ 
   
   const filteredNavItems: NavItem[] = navItems
     .filter((item) => {
@@ -222,7 +221,6 @@ export default function Sidebar({ isMobileOpen, onMobileClose }: SidebarProps) {
 
   const sidebarContent = (
     <div className="flex flex-col h-full">
-      {/* LOGO */}
       <div className="border-b border-gray-200 flex flex-col items-center justify-center py-4">
         <div className="relative w-[100px] h-[40px] mb-1">
           <Image
@@ -239,12 +237,12 @@ export default function Sidebar({ isMobileOpen, onMobileClose }: SidebarProps) {
         </p>
       </div>
 
-      {/* NAVIGATION */}
+      
       <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto">
         {filteredNavItems.map((item) => {
           const Icon = item.icon;
 
-          // DROPDOWN ITEMS
+         
           if (item.subItems && item.subItems.length > 0) {
             const isMenuOpen = openMenus[item.name] || isSubItemActive(item.subItems);
 
@@ -297,7 +295,6 @@ export default function Sidebar({ isMobileOpen, onMobileClose }: SidebarProps) {
             );
           }
 
-          // NORMAL LINK
           const isItemActive = isActive(item.href || '');
 
           return (
@@ -336,9 +333,9 @@ export default function Sidebar({ isMobileOpen, onMobileClose }: SidebarProps) {
     </div>
   );
 
-  // ======================
+  
   // MOBILE MENU TOGGLE BUTTON
-  // ======================
+ 
 
   const MobileMenuButton = () => (
     <button
@@ -349,9 +346,9 @@ export default function Sidebar({ isMobileOpen, onMobileClose }: SidebarProps) {
     </button>
   );
 
-  // ======================
+
   // DESKTOP SIDEBAR
-  // ======================
+ 
 
   const DesktopSidebar = () => (
     <div className="hidden lg:block w-64 h-screen bg-white border-r border-gray-200 sticky top-0">
@@ -359,9 +356,9 @@ export default function Sidebar({ isMobileOpen, onMobileClose }: SidebarProps) {
     </div>
   );
 
-  // ======================
+  
   // MOBILE SIDEBAR (OVERLAY)
-  // ======================
+ 
 
   const MobileSidebar = () => {
     if (!isMobileMenuOpen) return null;
@@ -390,9 +387,9 @@ export default function Sidebar({ isMobileOpen, onMobileClose }: SidebarProps) {
     );
   };
 
-  // ======================
+
   // RENDER
-  // ======================
+ 
 
   return (
     <>

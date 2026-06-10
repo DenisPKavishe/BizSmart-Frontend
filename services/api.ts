@@ -1,7 +1,53 @@
-// services/api.ts
+
 import api from '@/lib/api';
 
-// ==================== AUTHENTICATION ====================
+//AUDIT LOGS
+export const auditApi = {
+  // Get all audit logs with filters
+  getAuditLogs: (params?: {
+    start_date?: string;
+    end_date?: string;
+    action?: string;
+    module?: string;
+    user_id?: number;
+    page?: number;
+    page_size?: number;
+  }) => api.get('/audit/audit-logs/', { params }),
+  
+  // Get single audit log
+  getAuditLog: (id: number) => 
+    api.get(`/audit/audit-logs/${id}/`),
+  
+  // Get current user's logs
+  getMyLogs: () => 
+    api.get('/audit/audit-logs/my_logs/'),
+  
+  // Get audit statistics
+  getAuditStats: () => 
+    api.get('/audit/audit-logs/stats/'),
+  
+  // Export audit logs
+  exportAuditLogs: (params?: {
+    start_date?: string;
+    end_date?: string;
+    action?: string;
+    module?: string;
+    format?: 'csv' | 'json';
+  }) => api.get('/audit/audit-logs/export/', { 
+    params,
+    responseType: 'blob' 
+  }),
+  
+  // Get available modules (for filters)
+  getModules: () => 
+    api.get('/audit/audit-logs/modules/'),
+  
+  // Get available actions (for filters)
+  getActions: () => 
+    api.get('/audit/audit-logs/actions/'),
+};
+
+//AUTHENTICATION 
 export const authApi = {
   login: (email: string, password: string) => 
     api.post('/auth/login/', { email, password }),
@@ -34,7 +80,7 @@ export const authApi = {
     api.patch('/auth/profile/', data),
 };
 
-// ==================== DASHBOARD & BI ====================
+//DASHBOARD & BI 
 export const biApi = {
   // Main Dashboard
   getMainDashboard: (params?: { month?: string }) => 
@@ -130,7 +176,7 @@ export const biApi = {
     api.post('/bi/clear-cache/'),
 };
 
-// ==================== FINANCIALS ====================
+// FINANCIALS
 export const financialsApi = {
   // Transactions
   getTransactions: (params?: any) => 
@@ -214,7 +260,7 @@ deleteBudgetItem: (budgetId: number, itemId: number) => api.delete(`/financials/
     api.get('/financials/export/', { params: { format, start_date: startDate, end_date: endDate } }),
 };
 
-// ==================== INVENTORY ====================
+//INVENTORY
 export const inventoryApi = {
   // Categories
   getCategories: () => 
@@ -301,7 +347,7 @@ export const inventoryApi = {
     api.get('/bi/sales/top-products/', { params }),  
 };  
 
-// ==================== SALES ====================
+// SALES
 export const salesApi = {
   // Customers
   getCustomers: () => 
@@ -351,12 +397,6 @@ export const salesApi = {
   
   getTodaySales: () => 
     api.get('/sales/reports/today/'),
-
-  // getDailyReport: (days?: number) => 
-  //   api.get('/sales/reports/daily/', { params: { days } }),
-  
-  // getTodayReport: () => 
-  //   api.get('/sales/reports/today/'), 
     
   getDailyReport: (params?: { days?: number }) => 
     api.get('/sales/reports/daily/', { params }),
@@ -375,69 +415,6 @@ export const salesApi = {
   deleteSaleItem: (id: number) => api.delete(`/sales/items/${id}/`),  
 };
 
-// // ==================== HR ====================
-// export const hrApi = {
-//   // Departments
-//   getDepartments: () => 
-//     api.get('/hr/departments/'),
-  
-//   createDepartment: (data: any) => 
-//     api.post('/hr/departments/', data),
-  
-//   // Employees
-//   getEmployees: () => 
-//     api.get('/hr/employees/'),
-  
-//   getEmployee: (id: number) => 
-//     api.get(`/hr/employees/${id}/`),
-  
-//   createEmployee: (data: any) => 
-//     api.post('/hr/employees/', data),
-  
-//   updateEmployee: (id: number, data: any) => 
-//     api.put(`/hr/employees/${id}/`, data),
-  
-//   deleteEmployee: (id: number) => 
-//     api.delete(`/hr/employees/${id}/`),
-  
-//     getSalaries: () => 
-//     api.get('/hr/salaries/'),
-  
-//   getSalary: (id: number) => 
-//     api.get(`/hr/salaries/${id}/`),
-  
-//   createSalary: (data: any) => 
-//     api.post('/hr/salaries/', data),
-  
-//   updateSalary: (id: number, data: any) => 
-//     api.put(`/hr/salaries/${id}/`, data),
-  
-//   deleteSalary: (id: number) => 
-//     api.delete(`/hr/salaries/${id}/`),
-  
-//   // Payroll
-//   getPayrolls: () => 
-//     api.get('/hr/payroll/'),
-  
-//   processPayroll: (month: number, year: number, includeCommission?: boolean) => 
-//     api.post('/hr/payroll/process/', { month, year, include_commission: includeCommission }),
-  
-//   markPayrollPaid: (id: number) => 
-//     api.post(`/hr/payroll/${id}/mark-paid/`),
-  
-//   // Reports
-//   getSalesByEmployee: (month?: number, year?: number) => 
-//     api.get('/hr/reports/sales-by-employee/', { params: { month, year } }),
-  
-//   getTopPerformers: (limit: number = 10, days: number = 30) => 
-//     api.get(`/hr/reports/top-performers/?limit=${limit}&days=${days}`),
-  
-//   getPayrollReport: (year: number) => 
-//     api.get(`/hr/reports/payroll/?year=${year}`),
-// };
-
-
-// services/api.ts - Add these to your existing hrApi
 
 export const hrApi = {
   // Departments
