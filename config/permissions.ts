@@ -67,17 +67,12 @@ export const ROLE_ACCESS: Record<string, string[]> = {
 
   // Accountant
   accountant: [
-    'dashboard',
     'financials',
     'hr',
     'profile',
-    'audit',
   ],
 
   auditor: [
-    'dashboard',
-    'analytics',
-    'financials',
     'profile',
     'audit',
   ],
@@ -200,7 +195,6 @@ export const getMenuForRole = (role: string): MenuItem[] => {
   // Accountant - Financials + HR + Audit
   if (normalizedRole === 'accountant') {
     return [
-      { name: 'Dashboard', href: '/dashboard', icon: 'FiHome' },
       {
         name: 'Financials',
         href: '/financials',
@@ -224,7 +218,6 @@ export const getMenuForRole = (role: string): MenuItem[] => {
           { name: 'Payroll', href: '/hr/payroll', icon: 'FiDollarSign' },
         ],
       },
-      { name: 'Audit Logs', href: '/audit-logs', icon: 'FiActivity' },
       { name: 'Profile', href: '/profile', icon: 'FiUser' },
     ];
   }
@@ -232,28 +225,6 @@ export const getMenuForRole = (role: string): MenuItem[] => {
   // Auditor - Read-only analytics, financials, and audit
   if (normalizedRole === 'auditor') {
     return [
-      { name: 'Dashboard', href: '/dashboard', icon: 'FiHome' },
-      {
-        name: 'Analytics',
-        href: '/analytics',
-        icon: 'FiBarChart2',
-        children: [
-          { name: 'Dashboard', href: '/bi/dashboard', icon: 'FiBarChart2' },
-          { name: 'Financial Analytics', href: '/bi/financial', icon: 'FiDollarSign' },
-          { name: 'Sales Analytics', href: '/bi/sales', icon: 'FiShoppingCart' },
-          { name: 'Inventory Analytics', href: '/bi/inventory', icon: 'FiBox' },
-          { name: 'Customer Analytics', href: '/bi/customers', icon: 'FiUsers' },
-          { name: 'Reports', href: '/reports', icon: 'FiFileText' },
-        ],
-      },
-      {
-        name: 'Financials',
-        href: '/financials',
-        icon: 'FiDollarSign',
-        children: [
-          { name: 'Reports', href: '/financials/reports', icon: 'FiBarChart2' },
-        ],
-      },
       { name: 'Audit Logs', href: '/audit-logs', icon: 'FiActivity' },
       { name: 'Profile', href: '/profile', icon: 'FiUser' },
     ];
