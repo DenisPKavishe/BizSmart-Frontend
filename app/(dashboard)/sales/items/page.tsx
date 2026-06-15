@@ -93,17 +93,17 @@ function ViewSaleItemModal({ isOpen, onClose, saleItem, canViewProfit }: any) {
               </div>
               <div>
                 <p className="text-xs text-gray-500">Unit Price</p>
-                <p className="text-sm text-gray-900">${parseFloat(saleItem.unit_price).toFixed(2)}</p>
+                <p className="text-sm text-gray-900">TZS {parseFloat(saleItem.unit_price).toLocaleString()}</p>
               </div>
               {canViewProfit && (
                 <>
                   <div>
                     <p className="text-xs text-gray-500">Cost Price</p>
-                    <p className="text-sm text-gray-900">${parseFloat(saleItem.cost_price).toFixed(2)}</p>
+                    <p className="text-sm text-gray-900">TZS {parseFloat(saleItem.cost_price).toLocaleString()}</p>
                   </div>
                   <div>
                     <p className="text-xs text-gray-500">Discount</p>
-                    <p className="text-sm text-gray-900">${parseFloat(saleItem.discount_amount).toFixed(2)}</p>
+                    <p className="text-sm text-gray-900">TZS {parseFloat(saleItem.discount_amount).toLocaleString()}</p>
                   </div>
                 </>
               )}
@@ -118,16 +118,16 @@ function ViewSaleItemModal({ isOpen, onClose, saleItem, canViewProfit }: any) {
               <div className="grid grid-cols-2 gap-4 bg-gray-50 p-4 rounded-lg">
                 <div>
                   <p className="text-xs text-gray-500">Total Price</p>
-                  <p className="text-lg font-bold text-blue-600">${parseFloat(saleItem.total_price).toFixed(2)}</p>
+                  <p className="text-lg font-bold text-blue-600">TZS {parseFloat(saleItem.total_price).toLocaleString()}</p>
                 </div>
                 <div>
                   <p className="text-xs text-gray-500">Total Cost</p>
-                  <p className="text-sm text-gray-900">${(parseFloat(saleItem.cost_price) * saleItem.quantity).toFixed(2)}</p>
+                  <p className="text-sm text-gray-900">TZS {(parseFloat(saleItem.cost_price) * saleItem.quantity).toLocaleString()}</p>
                 </div>
                 <div>
                   <p className="text-xs text-gray-500">Profit</p>
                   <p className={`text-sm font-semibold ${profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                    ${profit.toFixed(2)}
+                    TZS {profit.toLocaleString()}
                   </p>
                 </div>
                 <div>
@@ -189,7 +189,7 @@ export default function SalesItemsPage() {
   };
 
   const formatCurrency = (amount: string) => {
-    return `$${parseFloat(amount).toFixed(2)}`;
+    return `TZS ${parseFloat(amount).toLocaleString()}`;
   };
 
   const resetFilters = () => {
@@ -292,7 +292,7 @@ export default function SalesItemsPage() {
                 <div>
                   <p className="text-xs text-gray-500">Total Revenue</p>
                   <p className="text-2xl font-bold text-purple-600">
-                    ${stats.totalRevenue.toFixed(0)}
+                    TZS {stats.totalRevenue.toLocaleString()}
                   </p>
                 </div>
                 <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
@@ -305,7 +305,7 @@ export default function SalesItemsPage() {
                 <div>
                   <p className="text-xs text-gray-500">Total Profit</p>
                   <p className="text-2xl font-bold text-amber-600">
-                    ${totalProfit.toFixed(0)}
+                    TZS {totalProfit.toLocaleString()}
                   </p>
                 </div>
                 <div className="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center">
@@ -323,7 +323,7 @@ export default function SalesItemsPage() {
               </div>
               <div className="text-right">
                 <p className="text-sm opacity-90">Total Profit</p>
-                <p className="text-xl font-bold">${totalProfit.toFixed(2)}</p>
+                <p className="text-xl font-bold">TZS {totalProfit.toLocaleString()}</p>
               </div>
             </div>
           </div>
@@ -415,7 +415,7 @@ export default function SalesItemsPage() {
                       {permissions.canViewProfit && (
                         <td className="px-6 py-4 text-right">
                           <span className={`text-sm font-semibold ${profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                            ${profit.toFixed(2)}
+                            TZS {profit.toLocaleString()}
                           </span>
                         </td>
                       )}

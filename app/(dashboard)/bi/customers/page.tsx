@@ -667,9 +667,7 @@ export default function CustomerDashboard() {
         <div className="flex flex-wrap justify-between items-center text-xs text-gray-400 gap-2">
           <span>Data as of {getMonthDisplay(selectedMonth)}</span>
           <div className="flex flex-wrap gap-4">
-            <span className="flex items-center gap-1">👥 Total customers: {formatNumber(totalCustomers)}</span>
-            <span className="flex items-center gap-1">💰 Customer LTV: {formatCurrency(averageLTV)}</span>
-            <span className="flex items-center gap-1">📊 Retention rate: {retentionRate.toFixed(1)}%</span>
+            <span className="flex items-center gap-1">Total customers: {formatNumber(totalCustomers)}</span>
             <Link href="/sales/customers" className="hover:text-teal-600">Manage Customers →</Link>
           </div>
         </div>

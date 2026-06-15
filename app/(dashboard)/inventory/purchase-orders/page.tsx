@@ -252,7 +252,7 @@ function ReceiveItemsModal({ isOpen, onClose, onSuccess, purchaseOrder }: any) {
                 <div className="bg-blue-50 rounded-lg p-3 text-sm text-blue-700">
                   <div className="flex justify-between items-center">
                     <div>
-                      <p className="font-medium">📦 Receive Stock</p>
+                      <p className="font-medium">Receive Stock</p>
                       <p className="text-xs mt-1">Enter the quantities you are receiving for each item below.</p>
                     </div>
                     {totalRemaining > 0 && (
@@ -1113,9 +1113,6 @@ export default function PurchaseOrdersPage() {
               <p className="text-2xl font-bold text-purple-600">
                 TZS{purchaseOrders.reduce((sum, po) => sum + parseFloat(po.total_amount || '0'), 0).toFixed(0)}
               </p>
-            </div>
-            <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
-              <FaMoneyBillWave className="text-purple-600" size={20} />
             </div>
           </div>
         </div>

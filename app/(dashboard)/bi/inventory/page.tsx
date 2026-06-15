@@ -483,7 +483,7 @@ export default function InventoryDashboard() {
             {lowStockProducts.length > 0 && (
               <div className="bg-white rounded-xl border border-red-200 overflow-hidden">
                 <div className="px-4 py-2 bg-red-50 border-b border-red-200">
-                  <h3 className="font-medium text-red-700 text-sm">⚠️ Low Stock ({lowStockProducts.length})</h3>
+                  <h3 className="font-medium text-red-700 text-sm">Low Stock ({lowStockProducts.length})</h3>
                 </div>
                 <div className="p-3 space-y-2 max-h-64 overflow-y-auto">
                   {lowStockProducts.slice(0, 5).map((product) => (
@@ -501,7 +501,7 @@ export default function InventoryDashboard() {
             {outOfStockProducts.length > 0 && (
               <div className="bg-white rounded-xl border border-red-200 overflow-hidden">
                 <div className="px-4 py-2 bg-red-50 border-b border-red-200">
-                  <h3 className="font-medium text-red-700 text-sm">🚫 Out of Stock ({outOfStockProducts.length})</h3>
+                  <h3 className="font-medium text-red-700 text-sm">Out of Stock ({outOfStockProducts.length})</h3>
                 </div>
                 <div className="p-3 space-y-2 max-h-64 overflow-y-auto">
                   {outOfStockProducts.slice(0, 5).map((product) => (
@@ -691,9 +691,6 @@ export default function InventoryDashboard() {
         <div className="flex flex-wrap justify-between items-center text-xs text-gray-400 gap-2">
           <span>Data as of {getMonthDisplay(selectedMonth)}</span>
           <div className="flex flex-wrap gap-4">
-            <span className="flex items-center gap-1">📦 Total stock value: {formatCurrency(totalStockValue)}</span>
-            <span className="flex items-center gap-1">⚠️ {lowStockCount} low stock items</span>
-            <span className="flex items-center gap-1">🚫 {outOfStockCount} out of stock</span>
             <Link href="/inventory/products" className="hover:text-blue-600">Manage Inventory →</Link>
           </div>
         </div>

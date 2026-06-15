@@ -366,9 +366,6 @@ export default function StockMovementsPage() {
                 TZS{stats.totalValue.toFixed(0)}
               </p>
             </div>
-            <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
-              <FaMoneyBillWave className="text-purple-600" size={20} />
-            </div>
           </div>
         </div>
       </div>

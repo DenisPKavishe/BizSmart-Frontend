@@ -573,8 +573,6 @@ export default function HRDashboard() {
         <div className="flex flex-wrap justify-between items-center text-xs text-gray-400 gap-2">
           <span>Data as of {getMonthDisplay(selectedMonth)}</span>
           <div className="flex flex-wrap gap-4">
-            <span className="flex items-center gap-1">👥 Total employees: {formatNumber(totalEmployees)}</span>
-            <span className="flex items-center gap-1">💰 Monthly payroll: {formatCurrency(totalPayroll)}</span>
             <Link href="/hr/employees" className="hover:text-purple-600">Manage Employees →</Link>
           </div>
         </div>

@@ -41,8 +41,7 @@ import {
 const formatCurrency = (value: number) => {
   const num = Number(value) || 0;
   if (num === 0) return 'TZS 0';
-  if (num >= 1000000) return `TZS ${(num / 1000000).toFixed(1)}M`;
-  if (num >= 1000) return `TZS ${(num / 1000).toFixed(0)}k`;
+  // Display full number without K/M suffix
   return `TZS ${num.toLocaleString()}`;
 };
 
@@ -542,11 +541,6 @@ export default function BIPage() {
       <div className="mt-6 pt-4 border-t border-gray-200">
         <div className="flex flex-wrap justify-between items-center text-xs text-gray-400 gap-2">
           <span>Last updated: {new Date().toLocaleString()}</span>
-          <div className="flex flex-wrap gap-4">
-            <span className="flex items-center gap-1">Green = Positive / Income / Profit</span>
-            <span className="flex items-center gap-1">Red = Negative / Loss</span>
-            <span className="flex items-center gap-1">Data based on active budget targets</span>
-          </div>
         </div>
       </div>
     </div>

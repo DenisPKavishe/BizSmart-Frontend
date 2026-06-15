@@ -155,8 +155,7 @@ const toNumber = (value: any): number => {
 const formatCurrency = (value: any): string => {
   const num = toNumber(value);
   if (num === 0) return 'TZS 0';
-  if (num >= 1000000) return `TZS ${(num / 1000000).toFixed(1)}M`;
-  if (num >= 1000) return `TZS ${(num / 1000).toFixed(0)}k`;
+  // Display full number without K/M suffix
   return `TZS ${num.toLocaleString()}`;
 };
 
@@ -887,8 +886,8 @@ export default function FinancialDashboard() {
               <ComposedChart data={monthlyChartData}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="month" />
-                <YAxis yAxisId="left" tickFormatter={(v) => `TZS ${toNumber(v)/1000}k`} />
-                <YAxis yAxisId="right" orientation="right" tickFormatter={(v) => `${toNumber(v)}k`} />
+                <YAxis yAxisId="left" tickFormatter={(v) => `TZS ${toNumber(v)}`} />
+                <YAxis yAxisId="right" orientation="right" tickFormatter={(v) => `${toNumber(v)}`} />
                 <Tooltip content={<CustomTooltip />} />
                 <Legend />
                 <Bar yAxisId="left" dataKey="revenue" fill="#10B981" name="Revenue" radius={[4, 4, 0, 0]} />
@@ -1182,7 +1181,7 @@ export default function FinancialDashboard() {
             <AreaChart data={cashFlowData.forecast_30_days.slice(0, 30)}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="day" />
-              <YAxis tickFormatter={(v) => `TZS ${toNumber(v)/1000}k`} />
+              <YAxis tickFormatter={(v) => `TZS ${toNumber(v)}`} />
               <Tooltip content={<CustomTooltip />} />
               <Area 
                 type="monotone" 
@@ -1216,8 +1215,6 @@ export default function FinancialDashboard() {
         <div className="flex flex-wrap justify-between items-center text-xs text-gray-400 gap-2">
           <span>Data as of {new Date().toLocaleString()}</span>
           <div className="flex flex-wrap gap-4">
-            <span className="flex items-center gap-1">Green = Positive / Income</span>
-            <span className="flex items-center gap-1">Red = Negative / Expenses</span>
             {hasBudget && <span className="flex items-center gap-1 text-blue-600">Budget tracking active</span>}
             <Link href="/reports" className="hover:text-blue-600">Download Financial Reports →</Link>
           </div>

@@ -666,9 +666,6 @@ export default function SalesDashboard() {
         <div className="flex flex-wrap justify-between items-center text-xs text-gray-400 gap-2">
           <span>Data for {getMonthDisplay(selectedMonth)}</span>
           <div className="flex flex-wrap gap-4">
-            <span className="flex items-center gap-1">💰 Full amounts shown</span>
-            <span className="flex items-center gap-1">👥 {totalCustomers} active customers</span>
-            <span className="flex items-center gap-1">⭐ Top product: {topProducts[0]?.name || 'N/A'}</span>
             <Link href="/reports" className="hover:text-blue-600">Download Sales Report →</Link>
           </div>
         </div>

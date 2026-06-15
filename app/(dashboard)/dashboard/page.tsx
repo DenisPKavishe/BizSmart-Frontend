@@ -74,8 +74,7 @@ const toNumber = (value: any): number => {
 const formatCurrency = (value: number) => {
   const num = toNumber(value);
   if (num === 0) return 'TZS 0';
-  if (num >= 1000000) return `TZS ${(num / 1000000).toFixed(1)}M`;
-  if (num >= 1000) return `TZS ${(num / 1000).toFixed(0)}k`;
+  // Display full number without K/M suffix
   return `TZS ${num.toLocaleString()}`;
 };
 
@@ -411,39 +410,30 @@ export default function DashboardPage() {
         </button>
       </div>
 
-      {/* Today's Cashflow Cards */}
+      {/* Today's Cashflow Cards - Simplified */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-6">
         {/* Revenue Card */}
         <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-2xl p-6 text-white shadow-lg">
-          <div className="flex items-start justify-between">
+          <div className="flex items-center justify-between">
             <div>
-              <p className="text-green-100 text-sm">Today's Revenue</p>
-              <p className="text-3xl font-bold mt-2">{formatCurrency(todayCashflow.revenue)}</p>
-              <div className="flex items-center gap-2 mt-3">
-                <div className="bg-white/20 rounded-full px-2 py-1 text-xs">
-                  {todayCashflow.transactions} transactions
-                </div>
-                <div className="bg-white/20 rounded-full px-2 py-1 text-xs">
-                  Avg: {formatCurrency(todayCashflow.averageOrderValue)}
-                </div>
-              </div>
+              <p className="text-green-100 text-sm font-medium">Today's Revenue</p>
+              <p className="text-2xl font-bold mt-2">{formatCurrency(todayCashflow.revenue)}</p>
             </div>
-            <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
-              <FiDollarSign className="w-6 h-6" />
+            <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
+              <FiDollarSign className="w-5 h-5" />
             </div>
           </div>
         </div>
 
         {/* Expenses Card */}
         <div className="bg-gradient-to-br from-red-500 to-red-600 rounded-2xl p-6 text-white shadow-lg">
-          <div className="flex items-start justify-between">
+          <div className="flex items-center justify-between">
             <div>
-              <p className="text-red-100 text-sm">Today's Expenses</p>
-              <p className="text-3xl font-bold mt-2">{formatCurrency(todayCashflow.expenses)}</p>
-              <p className="text-red-100 text-xs mt-3">Outgoing payments today</p>
+              <p className="text-red-100 text-sm font-medium">Today's Expenses</p>
+              <p className="text-2xl font-bold mt-2">{formatCurrency(todayCashflow.expenses)}</p>
             </div>
-            <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
-              <FiTrendingDown className="w-6 h-6" />
+            <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
+              <FiTrendingDown className="w-5 h-5" />
             </div>
           </div>
         </div>
@@ -454,23 +444,17 @@ export default function DashboardPage() {
             ? 'bg-gradient-to-br from-teal-500 to-teal-600' 
             : 'bg-gradient-to-br from-orange-500 to-orange-600'
         } text-white`}>
-          <div className="flex items-start justify-between">
+          <div className="flex items-center justify-between">
             <div>
-              <p className="text-white/80 text-sm">Today's Net Profit</p>
-              <p className="text-3xl font-bold mt-2">{formatCurrency(todayCashflow.profit)}</p>
-              <div className="flex items-center gap-2 mt-3">
-                <span className="bg-white/20 rounded-full px-2 py-1 text-xs">
-                  Margin: {todayCashflow.profitMargin.toFixed(1)}%
-                </span>
-                {todayCashflow.profit >= 0 ? (
-                  <FiArrowUp className="w-4 h-4" />
-                ) : (
-                  <FiArrowDown className="w-4 h-4" />
-                )}
-              </div>
+              <p className="text-white/80 text-sm font-medium">Today's Net Profit</p>
+              <p className="text-2xl font-bold mt-2">{formatCurrency(todayCashflow.profit)}</p>
             </div>
-            <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
-              <FiTrendingUp className="w-6 h-6" />
+            <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
+              {todayCashflow.profit >= 0 ? (
+                <FiTrendingUp className="w-5 h-5" />
+              ) : (
+                <FiTrendingDown className="w-5 h-5" />
+              )}
             </div>
           </div>
         </div>
