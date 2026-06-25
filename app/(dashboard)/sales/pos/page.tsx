@@ -1,4 +1,4 @@
-// app/(dashboard)/sales/pos/page.tsx - WITH PROPER CHANGE/TIP HANDLING
+// app/(dashboard)/sales/pos/page.tsx - CAMERA WITHOUT EXPLICIT PERMISSION REQUEST
 
 'use client';
 
@@ -6,7 +6,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useAuthStore } from '@/store/authStore';
 import { inventoryApi, salesApi } from '@/services/api';
 import toast from 'react-hot-toast';
-import { Html5QrcodeScanner } from 'html5-qrcode';
+import { Html5Qrcode, Html5QrcodeScannerState } from 'html5-qrcode';
 import {
   FiSearch,
   FiPlus,
@@ -60,6 +60,8 @@ interface CartItem {
   barcode?: string;
 }
 
+const SCANNER_ELEMENT_ID = 'barcode-scanner';
+
 export default function POSPage() {
   const { user } = useAuthStore();
   const [products, setProducts] = useState<Product[]>([]);
@@ -78,23 +80,24 @@ export default function POSPage() {
   const [lastSale, setLastSale] = useState<any>(null);
   const [showCustomerModal, setShowCustomerModal] = useState(false);
   const [quickAmounts] = useState([5000, 10000, 20000, 50000, 100000]);
-  
-  // Overpayment options: 'return' or 'tip'
+
+  // Overpayment options
   const [overpaymentAction, setOverpaymentAction] = useState<'return' | 'tip'>('return');
-  
-  // Barcode scanning states
+
+  // Barcode scanning state
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [barcodeInput, setBarcodeInput] = useState('');
-  const [isScanning, setIsScanning] = useState(false);
-  const [useFrontCamera, setUseFrontCamera] = useState(true);
+  const [useFrontCamera, setUseFrontCamera] = useState(false);
+  const [isCameraStarting, setIsCameraStarting] = useState(false);
   const [isSwitchingCamera, setIsSwitchingCamera] = useState(false);
-  const [cameraPermission, setCameraPermission] = useState<boolean | null>(null);
-  const [isRequestingPermission, setIsRequestingPermission] = useState(false);
-  
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
+
   const cartEndRef = useRef<HTMLDivElement>(null);
   const barcodeInputRef = useRef<HTMLInputElement>(null);
-  const scannerRef = useRef<Html5QrcodeScanner | null>(null);
+  const scannerRef = useRef<Html5Qrcode | null>(null);
   const scannerContainerRef = useRef<HTMLDivElement>(null);
+  const isHandlingScanRef = useRef(false);
 
   // Helper function to convert price to number
   const parsePrice = (price: number | string): number => {
@@ -123,14 +126,14 @@ export default function POSPage() {
     const itemTotal = typeof item.total === 'number' ? item.total : parseFloat(String(item.total)) || 0;
     return sum + itemTotal;
   }, 0);
-  
+
   const total = subtotal;
   const itemCount = cart.reduce((sum, item) => sum + (typeof item.quantity === 'number' ? item.quantity : 0), 0);
-  
+
   // Calculate overpayment amount
   const overpaymentAmount = amountPaid > total ? amountPaid - total : 0;
-  
-  // Final amount to record (amount paid minus tip if keep as tip)
+
+  // Final amount to record
   const finalAmountPaid = overpaymentAction === 'tip' ? total : amountPaid;
 
   // Fetch products and customers
@@ -142,25 +145,27 @@ export default function POSPage() {
     cartEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [cart]);
 
-  // Focus barcode input when component loads
+  // Focus barcode input when component loads / scanner closes
   useEffect(() => {
     if (barcodeInputRef.current && !isScannerOpen) {
       barcodeInputRef.current.focus();
     }
   }, [isScannerOpen]);
 
-  // Check camera permission when modal opens
+  // Scanner lifecycle - starts automatically when modal opens
   useEffect(() => {
     if (isScannerOpen) {
-      checkAndRequestCameraPermission();
+      isHandlingScanRef.current = false;
+      setHasPermission(null);
+      setCameraError(null);
+      // Try to start scanner immediately without asking permission first
+      startScanner(useFrontCamera);
     }
-    
+
     return () => {
-      if (scannerRef.current) {
-        scannerRef.current.clear();
-        scannerRef.current = null;
-      }
+      stopScanner();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isScannerOpen]);
 
   const fetchData = async () => {
@@ -170,17 +175,16 @@ export default function POSPage() {
         inventoryApi.getProducts(),
         salesApi.getCustomers(),
       ]);
-      
+
       let productsData = productsRes.data.results || productsRes.data || [];
       const customersData = customersRes.data.results || customersRes.data || [];
-      
-      // Convert selling_price to number for each product
+
       productsData = productsData.map((product: any) => ({
         ...product,
         selling_price: parsePrice(product.selling_price),
         buying_price: parsePrice(product.buying_price || 0)
       }));
-      
+
       setProducts(productsData);
       setCustomers(customersData);
     } catch (error) {
@@ -191,193 +195,141 @@ export default function POSPage() {
     }
   };
 
-  // Check and request camera permission
-  const checkAndRequestCameraPermission = async () => {
-    setIsRequestingPermission(true);
-    
-    try {
-      const permissions = await navigator.permissions.query({ name: 'camera' as PermissionName });
-      
-      if (permissions.state === 'granted') {
-        setCameraPermission(true);
-        initScanner();
-      } else if (permissions.state === 'prompt') {
-        await requestCameraAccess();
-      } else if (permissions.state === 'denied') {
-        setCameraPermission(false);
-        toast.error('Camera permission denied. Please enable camera in browser settings.');
-      }
-      
-      permissions.addEventListener('change', (e) => {
-        if ((e.target as any).state === 'granted') {
-          setCameraPermission(true);
-          initScanner();
-        }
-      });
-      
-    } catch (error) {
-      console.error('Permission check failed:', error);
-      await requestCameraAccess();
-    } finally {
-      setIsRequestingPermission(false);
+  // Map getUserMedia errors to friendly messages
+  const describeCameraError = (err: any): string => {
+    const name = err?.name || '';
+    const message = String(err?.message || err || '');
+
+    if (name === 'NotAllowedError' || /permission denied/i.test(message)) {
+      return 'Camera permission denied. Please allow camera access in your browser settings.';
     }
+    if (name === 'NotFoundError' || /no camera/i.test(message)) {
+      return 'No camera found on this device.';
+    }
+    if (name === 'NotReadableError') {
+      return 'Camera is already in use by another application.';
+    }
+    if (name === 'OverconstrainedError') {
+      return 'The requested camera is not available on this device.';
+    }
+    return 'Failed to access camera. Please check your camera settings.';
   };
-  
-  const requestCameraAccess = async () => {
+
+  // Start the scanner - tries to start without asking permission first
+  const startScanner = async (frontCamera: boolean) => {
+    if (!scannerContainerRef.current) return;
+
+    setCameraError(null);
+    setIsCameraStarting(true);
+
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: useFrontCamera ? "user" : "environment" }
-      });
-      
-      stream.getTracks().forEach(track => track.stop());
-      
-      setCameraPermission(true);
-      initScanner();
-      
-    } catch (error: any) {
-      console.error('Camera access denied:', error);
-      
-      if (error.name === 'NotAllowedError') {
-        setCameraPermission(false);
-        toast.error('Camera permission denied. Please allow camera access and refresh.');
-      } else if (error.name === 'NotFoundError') {
-        setCameraPermission(false);
-        toast.error('No camera found on this device.');
-      } else {
-        setCameraPermission(false);
-        toast.error('Failed to access camera. Please check your camera settings.');
+      if (!scannerRef.current) {
+        scannerRef.current = new Html5Qrcode(SCANNER_ELEMENT_ID, { verbose: false });
       }
+
+      await scannerRef.current.start(
+        { facingMode: frontCamera ? 'user' : 'environment' },
+        {
+          fps: 10,
+          qrbox: { width: 300, height: 150 },
+          aspectRatio: 1.7777778,
+          disableFlip: false,
+        },
+        onScanSuccess,
+        onScanError
+      );
+      
+      // Scanner started successfully
+      setHasPermission(true);
+      
+    } catch (err: any) {
+      console.error('Scanner start failed:', err);
+      setHasPermission(false);
+      setCameraError(describeCameraError(err));
+      
+      // If error is NotAllowedError, show user friendly message
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        // Don't automatically retry - let user click "Try Again"
+        toast.error('Camera access denied. Click "Try Again" to request permission.');
+      }
+    } finally {
+      setIsCameraStarting(false);
     }
   };
 
-  // Initialize scanner
-  const initScanner = () => {
-    if (!scannerContainerRef.current) return;
-    
-    if (scannerRef.current) {
-      scannerRef.current.clear();
-      scannerRef.current = null;
-    }
-    
-    while (scannerContainerRef.current.firstChild) {
-      scannerContainerRef.current.removeChild(scannerContainerRef.current.firstChild);
-    }
-    
-    const facingMode = useFrontCamera ? "user" : "environment";
-    
+  // Stop the scanner
+  const stopScanner = async () => {
+    const scanner = scannerRef.current;
+    if (!scanner) return;
+
     try {
-      scannerRef.current = new Html5QrcodeScanner(
-        "barcode-scanner",
-        {
-          fps: 10,
-          qrbox: { width: 250, height: 250 },
-          aspectRatio: 1.0,
-          rememberLastUsedCamera: true,
-          videoConstraints: {
-            facingMode: { exact: facingMode },
-            width: { ideal: 1280 },
-            height: { ideal: 720 }
-          },
-          supportedScanTypes: [],
-        },
-        false
-      );
-      
-      scannerRef.current.render(onScanSuccess, onScanError);
-      
-    } catch (error: any) {
-      console.error('Scanner initialization failed:', error);
-      
-      if (error.message?.includes('facingMode')) {
-        try {
-          scannerRef.current = new Html5QrcodeScanner(
-            "barcode-scanner",
-            {
-              fps: 10,
-              qrbox: { width: 250, height: 250 },
-              aspectRatio: 1.0,
-              rememberLastUsedCamera: true,
-              videoConstraints: {
-                width: { ideal: 1280 },
-                height: { ideal: 720 }
-              },
-              supportedScanTypes: [],
-            },
-            false
-          );
-          
-          scannerRef.current.render(onScanSuccess, onScanError);
-        } catch (fallbackError) {
-          toast.error('Failed to start camera. Please check your camera settings.');
-        }
-      } else {
-        toast.error('Failed to start camera scanner.');
+      const state = scanner.getState();
+      if (state === Html5QrcodeScannerState.SCANNING || state === Html5QrcodeScannerState.PAUSED) {
+        await scanner.stop();
       }
+      await scanner.clear();
+    } catch (err) {
+      console.warn('Error stopping scanner:', err);
     }
   };
-  
+
+  const closeScanner = () => {
+    setIsScannerOpen(false);
+  };
+
   // Switch camera
   const switchCamera = async () => {
+    if (isSwitchingCamera || isCameraStarting) return;
+
     setIsSwitchingCamera(true);
-    
-    if (scannerRef.current) {
-      scannerRef.current.clear();
-      scannerRef.current = null;
-    }
-    
-    if (scannerContainerRef.current) {
-      while (scannerContainerRef.current.firstChild) {
-        scannerContainerRef.current.removeChild(scannerContainerRef.current.firstChild);
-      }
-    }
-    
-    const newCameraState = !useFrontCamera;
-    setUseFrontCamera(newCameraState);
-    
+    const newFacing = !useFrontCamera;
+
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: newCameraState ? "user" : "environment" }
-      });
-      stream.getTracks().forEach(track => track.stop());
-      
-      setTimeout(() => {
-        initScanner();
-        setIsSwitchingCamera(false);
-      }, 100);
-      
-    } catch (error) {
-      console.error('Camera switch failed:', error);
-      toast.error('Failed to switch camera. Please check permissions.');
+      await stopScanner();
+      setUseFrontCamera(newFacing);
+      // Reset permission state for retry
+      setHasPermission(null);
+      await startScanner(newFacing);
+    } catch (err) {
+      console.error('Camera switch failed:', err);
+      toast.error('Failed to switch camera.');
+    } finally {
       setIsSwitchingCamera(false);
     }
   };
-  
-  const onScanSuccess = async (decodedText: string, decodedResult: any) => {
-    console.log(`Barcode detected: ${decodedText}`);
-    
+
+  const onScanSuccess = async (decodedText: string) => {
+    if (isHandlingScanRef.current) return;
+    isHandlingScanRef.current = true;
+
+    // Pause scanning
+    try {
+      if (scannerRef.current?.getState() === Html5QrcodeScannerState.SCANNING) {
+        scannerRef.current.pause(true);
+      }
+    } catch {
+      // ignore
+    }
+
     try {
       const audio = new Audio('/beep.mp3');
-      audio.play().catch(e => console.log('Audio play failed'));
-    } catch (e) {}
-    
-    setIsScannerOpen(false);
-    setIsScanning(false);
-    
-    await findProductByBarcode(decodedText);
-    
-    if (barcodeInputRef.current) {
-      setTimeout(() => {
-        barcodeInputRef.current?.focus();
-      }, 100);
+      audio.play().catch(() => {});
+    } catch {
+      // ignore
     }
-  };
-  
-  const onScanError = (error: any) => {
-    console.warn(`Scan error: ${error}`);
+
+    await findProductByBarcode(decodedText);
+    closeScanner();
+
+    setTimeout(() => {
+      barcodeInputRef.current?.focus();
+    }, 100);
   };
 
+  const onScanError = (_errorMessage: string) => {};
+
   // Manual barcode input
-  const handleBarcodeSubmit = async (e: React.KeyboardEvent) => {
+  const handleBarcodeSubmit = async (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && barcodeInput) {
       e.preventDefault();
       await findProductByBarcode(barcodeInput);
@@ -386,9 +338,10 @@ export default function POSPage() {
   };
 
   // Find product by barcode
-  const findProductByBarcode = async (barcode: string) => {
-    const product = products.find(p => p.barcode === barcode);
-    
+  const findProductByBarcode = async (barcodeRaw: string) => {
+    const barcode = barcodeRaw.trim();
+    const product = products.find(p => p.barcode?.trim() === barcode);
+
     if (product && product.quantity_on_hand > 0) {
       addToCart(product);
     } else if (product && product.quantity_on_hand === 0) {
@@ -418,14 +371,14 @@ export default function POSPage() {
   // Add to cart
   const addToCart = (product: Product) => {
     const price = parsePrice(product.selling_price);
-    
+
     if (price === 0) {
       toast.error('Invalid product price');
       return;
     }
-    
+
     const existingItem = cart.find(item => item.product_id === product.id);
-    
+
     if (existingItem) {
       if (existingItem.quantity + 1 > product.quantity_on_hand) {
         toast.error(`Only ${product.quantity_on_hand} items in stock`);
@@ -455,17 +408,17 @@ export default function POSPage() {
   const updateQuantity = (itemId: number, newQuantity: number) => {
     const item = cart.find(i => i.id === itemId);
     if (!item) return;
-    
+
     if (newQuantity < 1) {
       removeFromCart(itemId);
       return;
     }
-    
+
     if (newQuantity > item.stock) {
       toast.error(`Only ${item.stock} items in stock`);
       return;
     }
-    
+
     setCart(cart.map(item =>
       item.id === itemId
         ? { ...item, quantity: newQuantity, total: newQuantity * item.price }
@@ -497,7 +450,7 @@ export default function POSPage() {
   // Set exact amount
   const setExactAmount = () => {
     setAmountPaid(total);
-    setOverpaymentAction('return'); // Reset to default
+    setOverpaymentAction('return');
   };
 
   // Process sale
@@ -508,30 +461,27 @@ export default function POSPage() {
     }
 
     const amountPaidValue = Number(amountPaid) || 0;
-    
+
     if (amountPaidValue < total && paymentMethod !== 'credit') {
       toast.error(`Amount paid (TZS ${amountPaidValue.toLocaleString()}) is less than total (TZS ${total.toLocaleString()})`);
       return;
     }
 
     setIsProcessing(true);
-    
+
     try {
-      // Calculate final amount to record
       let finalAmount = amountPaidValue;
       let tipAmount = 0;
-      
+
       if (amountPaidValue > total) {
         if (overpaymentAction === 'tip') {
-          // Keep excess as tip, record total only
           finalAmount = total;
           tipAmount = amountPaidValue - total;
         } else {
-          // Return change, record full amount paid
           finalAmount = amountPaidValue;
         }
       }
-      
+
       const saleData: any = {
         customer_name: customerName || 'Walk-in Customer',
         customer_phone: customerPhone,
@@ -546,14 +496,13 @@ export default function POSPage() {
         notes: tipAmount > 0 ? `Tip included: TZS ${tipAmount.toLocaleString()}` : '',
         tip_amount: tipAmount
       };
-      
+
       if (selectedCustomerId) {
         saleData.customer_id = selectedCustomerId;
       }
 
       const response = await salesApi.processSale(saleData);
-      
-      // Store receipt data
+
       setLastSale({
         ...response.data,
         amountPaidEntered: amountPaidValue,
@@ -563,16 +512,15 @@ export default function POSPage() {
         tipAmount: tipAmount,
         total: total
       });
-      
+
       toast.success(`Sale completed! Invoice: ${response.data.sale.invoice_number}`);
-      
-      // Reset form
+
       setCart([]);
       setAmountPaid(0);
       setOverpaymentAction('return');
       fetchData();
       setShowReceipt(true);
-      
+
     } catch (error: any) {
       console.error('Sale failed:', error);
       toast.error(error.response?.data?.error || 'Sale failed. Please try again.');
@@ -592,7 +540,6 @@ export default function POSPage() {
 
   const quickAddAmount = (amount: number) => {
     setAmountPaid(prev => prev + amount);
-    // Reset overpayment action when amount changes
     if ((amountPaid + amount) > total) {
       setOverpaymentAction('return');
     }
@@ -605,7 +552,6 @@ export default function POSPage() {
     } else {
       setAmountPaid(numValue);
     }
-    // Reset overpayment action when amount changes
     if (numValue > total) {
       setOverpaymentAction('return');
     }
@@ -613,19 +559,19 @@ export default function POSPage() {
 
   const printReceipt = () => {
     if (!lastSale) return;
-    
+
     const sale = lastSale.sale;
     const formatCurrencyPrint = (value: number) => {
       if (!value && value !== 0) return 'TZS 0';
       return `TZS ${value.toLocaleString()}`;
     };
-    
+
     const printWindow = window.open('', '_blank', 'width=400,height=600');
     if (!printWindow) {
       toast.error('Please allow popups to print receipt');
       return;
     }
-    
+
     printWindow.document.write(`
       <!DOCTYPE html>
       <html>
@@ -662,33 +608,33 @@ export default function POSPage() {
           <div>${(user as any)?.business_city || ''}</div>
           <div>Tel: ${user?.phone || ''}</div>
         </div>
-        
+
         <div class="receipt-title">SALES RECEIPT</div>
-        
+
         <div class="info-row"><span>Invoice No:</span><span><strong>${sale.invoice_number}</strong></span></div>
         <div class="info-row"><span>Date:</span><span>${new Date(sale.sale_date).toLocaleString()}</span></div>
         <div class="info-row"><span>Cashier:</span><span>${user?.username || 'N/A'}</span></div>
         <div class="info-row"><span>Customer:</span><span>${sale.customer_name || 'Walk-in Customer'}</span></div>
         ${sale.customer_phone ? `<div class="info-row"><span>Phone:</span><span>${sale.customer_phone}</span></div>` : ''}
-        
+
         <div class="divider"></div>
-        
+
         <table class="items-table">
           <thead><tr><th>Item</th><th>Qty</th><th>Price</th><th>Total</th></tr></thead>
           <tbody>
             ${sale.items?.map((item: any) => `
               <tr>
-                <td>${item.product_name}</span></td>
-                <td>${item.quantity}</span></td>
-                <td>${formatCurrencyPrint(item.unit_price)}</span></td>
-                <td>${formatCurrencyPrint(item.total_price)}</span></td>
+                <td>${item.product_name}</td>
+                <td>${item.quantity}</td>
+                <td>${formatCurrencyPrint(item.unit_price)}</td>
+                <td>${formatCurrencyPrint(item.total_price)}</td>
               </tr>
-            `).join('') || '<tr><td colspan="4">No items</td></table>'}
+            `).join('') || '<tr><td colspan="4">No items</td></tr>'}
           </tbody>
         </table>
-        
+
         <div class="divider"></div>
-        
+
         <div class="totals">
           <div class="info-row"><span>Subtotal:</span><span>${formatCurrencyPrint(sale.subtotal)}</span></div>
           ${sale.discount_amount > 0 ? `<div class="info-row"><span>Discount:</span><span>-${formatCurrencyPrint(sale.discount_amount)}</span></div>` : ''}
@@ -697,7 +643,7 @@ export default function POSPage() {
           <div class="info-row"><span>Amount Paid:</span><span>${formatCurrencyPrint(lastSale.actualAmountPaid)}</span></div>
           ${lastSale.tipAmount > 0 ? `<div class="info-row"><span>Tip:</span><span>${formatCurrencyPrint(lastSale.tipAmount)}</span></div>` : ''}
         </div>
-        
+
         <div class="footer">
           <div>Thank you for your business!</div>
           <div>${sale.status === 'completed' ? '✓ Payment Completed' : 'Status: ' + sale.status}</div>
@@ -706,7 +652,7 @@ export default function POSPage() {
       </body>
       </html>
     `);
-    
+
     printWindow.document.close();
     printWindow.print();
   };
@@ -752,7 +698,7 @@ export default function POSPage() {
               placeholder="Enter barcode manually and press Enter..."
               value={barcodeInput}
               onChange={(e) => setBarcodeInput(e.target.value)}
-              onKeyPress={handleBarcodeSubmit}
+              onKeyDown={handleBarcodeSubmit}
               className="w-full pl-11 pr-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 font-mono text-lg"
             />
           </div>
@@ -910,19 +856,19 @@ export default function POSPage() {
                     <h3 className="font-medium">Customer Information</h3>
                     <button onClick={() => setShowCustomerModal(true)} className="text-sm text-brand-600">Select Customer</button>
                   </div>
-                  <input 
-                    type="text" 
-                    placeholder="Customer name" 
-                    value={customerName} 
-                    onChange={(e) => setCustomerName(e.target.value)} 
-                    className="w-full p-2 border rounded-lg mb-2" 
+                  <input
+                    type="text"
+                    placeholder="Customer name"
+                    value={customerName}
+                    onChange={(e) => setCustomerName(e.target.value)}
+                    className="w-full p-2 border rounded-lg mb-2"
                   />
-                  <input 
-                    type="tel" 
-                    placeholder="Phone number" 
-                    value={customerPhone} 
-                    onChange={(e) => setCustomerPhone(e.target.value)} 
-                    className="w-full p-2 border rounded-lg" 
+                  <input
+                    type="tel"
+                    placeholder="Phone number"
+                    value={customerPhone}
+                    onChange={(e) => setCustomerPhone(e.target.value)}
+                    className="w-full p-2 border rounded-lg"
                   />
                   {selectedCustomerId && (
                     <div className="mt-2 text-sm text-green-600 flex justify-between items-center">
@@ -972,7 +918,7 @@ export default function POSPage() {
                 <div>
                   <div className="flex items-center justify-between mb-2">
                     <label className="font-medium text-gray-900">Amount Paid</label>
-                    <button 
+                    <button
                       onClick={setExactAmount}
                       className="px-3 py-1 text-sm bg-brand-100 text-brand-600 rounded-lg hover:bg-brand-200 transition"
                     >
@@ -997,7 +943,7 @@ export default function POSPage() {
                     onChange={(e) => handleAmountPaidChange(e.target.value)}
                     className="w-full p-3 border rounded-lg text-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
                   />
-                  
+
                   {/* Overpayment Options */}
                   {overpaymentAmount > 0 && (
                     <div className="mt-4 p-4 bg-yellow-50 rounded-lg border border-yellow-200">
@@ -1038,7 +984,7 @@ export default function POSPage() {
                       )}
                     </div>
                   )}
-                  
+
                   {/* Short payment warning */}
                   {amountPaid > 0 && amountPaid < total && paymentMethod !== 'credit' && (
                     <div className="mt-4 p-3 bg-red-50 rounded-lg border border-red-200">
@@ -1062,7 +1008,7 @@ export default function POSPage() {
         )}
       </div>
 
-      {/* Barcode Scanner Modal */}
+      {/* Barcode Scanner Modal - Starts camera without asking permission first */}
       {isScannerOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-95 z-50 flex items-center justify-center p-4">
           <div className="relative w-full max-w-lg bg-black rounded-2xl overflow-hidden">
@@ -1070,51 +1016,87 @@ export default function POSPage() {
               <div className="flex justify-between items-center text-white">
                 <div>
                   <h3 className="text-lg font-semibold">Scan Barcode</h3>
-                  <p className="text-xs text-gray-300">Using {useFrontCamera ? 'FRONT' : 'BACK'} camera</p>
+                  <p className="text-xs text-gray-300">
+                    {useFrontCamera ? 'FRONT' : 'BACK'} camera
+                    {isCameraStarting && ' (starting...)'}
+                    {!isCameraStarting && !cameraError && hasPermission !== false && ' ✓ Ready'}
+                  </p>
                 </div>
                 <div className="flex gap-2">
-                  <button onClick={switchCamera} disabled={isSwitchingCamera} className="p-2 bg-white/20 rounded-full hover:bg-white/30 transition disabled:opacity-50">
-                    {isSwitchingCamera ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <FiRotateCcw size={20} />}
+                  <button
+                    onClick={switchCamera}
+                    disabled={isSwitchingCamera || isCameraStarting}
+                    className="p-2 bg-white/20 rounded-full hover:bg-white/30 transition disabled:opacity-50"
+                  >
+                    {isSwitchingCamera ? (
+                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    ) : (
+                      <FiRotateCcw size={20} />
+                    )}
                   </button>
-                  <button onClick={() => { if(scannerRef.current) scannerRef.current.clear(); setIsScannerOpen(false); }} className="p-2 bg-white/20 rounded-full hover:bg-white/30 transition">
+                  <button onClick={closeScanner} className="p-2 bg-white/20 rounded-full hover:bg-white/30 transition">
                     <FiX size={20} />
                   </button>
                 </div>
               </div>
             </div>
-            
-            {cameraPermission === false && !isRequestingPermission && (
-              <div className="w-full min-h-[500px] flex items-center justify-center bg-black">
-                <div className="text-center text-white p-6">
+
+            {/* Scanner Element */}
+            <div id={SCANNER_ELEMENT_ID} ref={scannerContainerRef} className="w-full min-h-[500px] bg-black"></div>
+
+            {/* Camera Error - Shows when permission denied */}
+            {cameraError && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black/90">
+                <div className="text-center text-white p-6 max-w-sm">
                   <FiAlertCircle className="w-16 h-16 mx-auto mb-4 text-yellow-500" />
                   <h3 className="text-xl font-semibold mb-2">Camera Access Required</h3>
-                  <p className="text-gray-300 mb-4">Please allow camera access to scan barcodes</p>
-                  <button onClick={checkAndRequestCameraPermission} className="px-6 py-2 bg-brand-600 rounded-lg hover:bg-brand-700">Allow Camera Access</button>
-                  <button onClick={() => setIsScannerOpen(false)} className="px-6 py-2 ml-3 bg-gray-600 rounded-lg hover:bg-gray-700">Cancel</button>
+                  <p className="text-gray-300 mb-4">{cameraError}</p>
+                  <div className="space-y-2">
+                    <button
+                      onClick={() => startScanner(useFrontCamera)}
+                      className="w-full px-6 py-3 bg-brand-600 rounded-lg hover:bg-brand-700 transition font-medium"
+                    >
+                      Try Again
+                    </button>
+                    <button 
+                      onClick={closeScanner} 
+                      className="w-full px-6 py-3 bg-gray-600 rounded-lg hover:bg-gray-700 transition"
+                    >
+                      Cancel
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
-            
-            {isRequestingPermission && (
-              <div className="w-full min-h-[500px] flex items-center justify-center bg-black">
+
+            {/* Loading State */}
+            {isCameraStarting && !cameraError && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black/80">
                 <div className="text-center text-white">
                   <div className="w-12 h-12 border-4 border-white border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-                  <p>Requesting camera permission...</p>
+                  <p>Starting camera...</p>
                 </div>
               </div>
             )}
-            
-            {cameraPermission === true && (
+
+            {/* Scanner Overlay - Only show when scanner is running */}
+            {!cameraError && !isCameraStarting && hasPermission !== false && (
               <>
-                <div id="barcode-scanner" ref={scannerContainerRef} className="w-full min-h-[500px] bg-black"></div>
-                <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/70 to-transparent">
+                <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/70 to-transparent pointer-events-none">
                   <div className="text-center text-white text-sm">
                     <p>📷 Point camera at product barcode</p>
-                    <p className="text-xs text-gray-300 mt-1">Supports EAN-13, Code 128, UPC-A, QR Code</p>
+                    <p className="text-xs text-gray-300 mt-1">
+                      Supports EAN-13, Code 128, UPC-A, QR Code
+                    </p>
                   </div>
                 </div>
                 <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-                  <div className="w-64 h-32 border-2 border-green-500 rounded-lg shadow-lg animate-pulse"></div>
+                  <div className="w-64 h-32 border-2 border-green-500 rounded-lg shadow-lg">
+                    <div className="absolute top-0 left-0 w-8 h-8 border-t-2 border-l-2 border-green-500"></div>
+                    <div className="absolute top-0 right-0 w-8 h-8 border-t-2 border-r-2 border-green-500"></div>
+                    <div className="absolute bottom-0 left-0 w-8 h-8 border-b-2 border-l-2 border-green-500"></div>
+                    <div className="absolute bottom-0 right-0 w-8 h-8 border-b-2 border-r-2 border-green-500"></div>
+                  </div>
                 </div>
               </>
             )}
@@ -1131,12 +1113,12 @@ export default function POSPage() {
               <button onClick={() => setShowCustomerModal(false)} className="p-1"><FiX size={20} /></button>
             </div>
             <div className="p-4 border-b">
-              <input 
-                type="text" 
-                placeholder="Search by name, phone or email..." 
-                value={customerSearchTerm} 
-                onChange={(e) => setCustomerSearchTerm(e.target.value)} 
-                className="w-full p-2 border rounded-lg" 
+              <input
+                type="text"
+                placeholder="Search by name, phone or email..."
+                value={customerSearchTerm}
+                onChange={(e) => setCustomerSearchTerm(e.target.value)}
+                className="w-full p-2 border rounded-lg"
               />
             </div>
             <div className="flex-1 overflow-y-auto p-4">
@@ -1158,7 +1140,7 @@ export default function POSPage() {
         </div>
       )}
 
-      {/* Receipt Modal - Shows only Amount Paid */}
+      {/* Receipt Modal */}
       {showReceipt && lastSale && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl max-w-md w-full p-6 text-center">
